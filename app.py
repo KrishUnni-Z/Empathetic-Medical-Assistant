@@ -15,7 +15,8 @@ st.set_page_config(page_title="Empathetic Medical Assistant", layout="wide")
 load_profile()
 
 # ----------------- UI Styling -----------------
-st.markdown("""
+st.markdown(
+    '''
     <style>
     .main .block-container {
         max-width: 100%;
@@ -28,7 +29,9 @@ st.markdown("""
         padding: 0.75rem !important;
     }
     </style>
-""", unsafe_allow_html=True)
+    ''',
+    unsafe_allow_html=True
+)
 
 # ----------------- Session -----------------
 if "chat_history" not in st.session_state:
@@ -40,7 +43,7 @@ if "started" not in st.session_state:
 with st.sidebar:
     st.markdown("### Profile")
 
-    # Theme toggle (final fix)
+    # Theme toggle
     theme_choice = st.radio("Theme", ["Dark", "Light"], index=0)
     if "theme" not in st.session_state:
         st.session_state.theme = theme_choice
@@ -54,7 +57,6 @@ primaryColor="#FF4B4B"
 backgroundColor="{ '#FFFFFF' if theme_choice == 'Light' else '#0E1117' }"
 secondaryBackgroundColor="{ '#F0F2F6' if theme_choice == 'Light' else '#262730' }"
 textColor="{ '#000000' if theme_choice == 'Light' else '#FAFAFA' }"
-"""
         os.makedirs(".streamlit", exist_ok=True)
         with open(".streamlit/config.toml", "w") as f:
             f.write(config)
@@ -76,18 +78,20 @@ textColor="{ '#000000' if theme_choice == 'Light' else '#FAFAFA' }"
         st.session_state.chat_history = []
         st.rerun()
 
-    # Profile form or read-only view
+    # Profile form
     if not st.session_state.started:
         with st.form("profile_form"):
             name = st.text_input("Your Name", value=user_profile["name"])
-            age = st.text_input("Your Age", value=user_profile["age"])
-            gender = st.selectbox("Gender", ["Male", "Female", "Other"],
-                                  index=["Male", "Female", "Other"].index(user_profile["gender"]) if user_profile["gender"] else 0)
+            age = st.number_input("Your Age", min_value=1, max_value=120, step=1)
+            gender = st.selectbox(
+                "Gender", ["Male", "Female", "Other"],
+                index=["Male", "Female", "Other"].index(user_profile["gender"]) if user_profile["gender"] else 0
+            )
             submitted = st.form_submit_button("Start")
 
         if submitted:
             user_profile["name"] = name
-            user_profile["age"] = age
+            user_profile["age"] = str(age)
             user_profile["gender"] = gender
             context_info["time"] = get_time()
             context_info["location"] = get_location()
@@ -95,7 +99,6 @@ textColor="{ '#000000' if theme_choice == 'Light' else '#FAFAFA' }"
             st.session_state.started = True
             st.session_state.chat_history = []
             st.rerun()
-
     else:
         st.markdown(f"- **Name:** {user_profile['name']}")
         st.markdown(f"- **Age:** {user_profile['age']}")
@@ -132,7 +135,7 @@ if st.session_state.get("started", False):
 
         chat_context = ""
         for role, msg in st.session_state.chat_history[-10:]:
-            chat_context += f"{'User' if role=='user' else 'Assistant'}: {msg}\n"
+            chat_context += f"{'User' if role == 'user' else 'Assistant'}: {msg}\n"
         chat_context += f"User: {user_input}"
 
         reply = asyncio.run(run_agent(agent, chat_context))
