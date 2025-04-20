@@ -50,14 +50,14 @@ with st.sidebar:
 
     if theme_choice != st.session_state.theme:
         st.session_state.theme = theme_choice
-        config = f """
+config = f'''
 [theme]
 base="{theme_choice.lower()}"
 primaryColor="#FF4B4B"
 backgroundColor="{ '#FFFFFF' if theme_choice == 'Light' else '#0E1117' }"
 secondaryBackgroundColor="{ '#F0F2F6' if theme_choice == 'Light' else '#262730' }"
 textColor="{ '#000000' if theme_choice == 'Light' else '#FAFAFA' }"
-"""
+'''
         os.makedirs(".streamlit", exist_ok=True)
         with open(".streamlit/config.toml", "w") as f:
             f.write(config)
