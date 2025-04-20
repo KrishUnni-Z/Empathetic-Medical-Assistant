@@ -1,0 +1,12 @@
+streamlit
+transformers
+torch
+torchvision
+torchaudio
+requests
+python-dotenv
+openai
+openai-agents
+openai-agents[viz]
+azure-ai-inference~=1.0.0b8
+pillow 
