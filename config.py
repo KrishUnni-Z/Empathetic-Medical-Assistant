@@ -1,18 +1,17 @@
+import streamlit as st
 from openai import AsyncOpenAI
 from agents import OpenAIChatCompletionsModel, ModelProvider, Model
-import os
-from dotenv import load_dotenv
 
-load_dotenv()
-
+# Setup GPT client using secrets
 client = AsyncOpenAI(
-    base_url="https://models.inference.ai.azure.com",
-    api_key=os.environ["GITHUB_TOKEN"],
+    base_url=st.secrets["AZURE_OPENAI_ENDPOINT"],
+    api_key=st.secrets["AZURE_OPENAI_API_KEY"],
 )
 
+# Model Provider
 class EmpatheticModelProvider(ModelProvider):
     def get_model(self, model_name) -> Model:
         return OpenAIChatCompletionsModel(model=model_name, openai_client=client)
 
-model = "gpt-4o"
+model = st.secrets["AZURE_OPENAI_DEPLOYMENT"]
 MODEL_PROVIDER = EmpatheticModelProvider()
