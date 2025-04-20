@@ -1,13 +1,16 @@
-import os
+import streamlit as st
 import requests
 from datetime import datetime
 from transformers import pipeline
 
+# Emotion classifier
 emotion_classifier = pipeline("text-classification", model="bhadresh-savani/bert-base-go-emotion", top_k=1)
 
+# Paths
 profile_path = "user_profile.txt"
 emotion_log_path = "emotion_log.txt"
 
+# Global state
 user_profile = {"name": "", "age": "", "gender": ""}
 context_info = {"time": "", "location": "", "emotion": ""}
 
@@ -31,6 +34,18 @@ def get_location():
         return res.get("city", "") + ", " + res.get("region", "")
     except:
         return "Unknown location"
+
+def get_weather():
+    try:
+        key = st.secrets["OPENWEATHER_API_KEY"]
+        loc = get_location().split(",")[0]
+        weather_url = f"http://api.openweathermap.org/data/2.5/weather?q={loc}&appid={key}&units=metric"
+        weather_data = requests.get(weather_url).json()
+        desc = weather_data['weather'][0]['description']
+        temp = weather_data['main']['temp']
+        return f"{desc}, {temp}°C"
+    except:
+        return "weather unavailable"
 
 def get_emotion(text):
     try:
