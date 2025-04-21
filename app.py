@@ -77,7 +77,7 @@ with st.sidebar:
         if user_profile["location"]:
             st.markdown(f"- Location: {user_profile['location']}")
 
-# Main Interface
+# Main interface
 st.title("Empathetic Medical Assistant")
 st.markdown("*This assistant is powered by AI and is not a substitute for professional medical advice.*")
 
@@ -126,15 +126,16 @@ if st.session_state.started:
             st.markdown(f"<div style='font-size: 15px'>{support_reply}</div>", unsafe_allow_html=True)
             st.session_state.chat_history.append(("bot", support_reply))
 
-        with st.chat_message("bot"):
-            st.markdown("Would you like to end this session with a final message, or continue talking?")
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("End Chat"):
-                    final_reply = asyncio.run(run_agent(conclusion_agent(), ""))
-                    with st.chat_message("bot"):
-                        st.markdown(f"<div style='font-size: 15px'>{final_reply}</div>", unsafe_allow_html=True)
-                    st.session_state.chat_history.append(("bot", final_reply))
-            with col2:
-                if st.button("Continue Talking"):
-                    st.rerun()
+        st.markdown("Would you like to end this session with a final message, or continue talking?")
+        end = st.button("End Chat")
+        cont = st.button("Continue Talking")
+
+        if end:
+            with st.chat_message("bot"):
+                final_reply = asyncio.run(run_agent(conclusion_agent(), ""))
+                st.markdown(f"<div style='font-size: 15px'>{final_reply}</div>", unsafe_allow_html=True)
+            st.session_state.chat_history.append(("bot", final_reply))
+            st.session_state.started = False  # End session
+
+        elif cont:
+            st.rerun()
