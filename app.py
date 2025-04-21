@@ -10,13 +10,10 @@ from chat_agents import (
     appointment_agent, conclusion_agent, run_agent
 )
 
-# Setup
 st.set_page_config(page_title="Empathetic Medical Assistant", layout="wide")
 load_profile()
 
-# UI Styling
-st.markdown(
-    '''
+st.markdown('''
     <style>
     .main .block-container {
         max-width: 100%;
@@ -29,11 +26,8 @@ st.markdown(
         padding: 0.75rem !important;
     }
     </style>
-    ''',
-    unsafe_allow_html=True
-)
+''', unsafe_allow_html=True)
 
-# Session State
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "started" not in st.session_state:
@@ -43,33 +37,10 @@ if "started" not in st.session_state:
 with st.sidebar:
     st.markdown("### Profile")
 
-    theme_choice = st.radio("Theme", ["Dark", "Light"], index=0)
-    if "theme" not in st.session_state:
-        st.session_state.theme = theme_choice
-
-    if theme_choice != st.session_state.theme:
-        st.session_state.theme = theme_choice
-        config = f'''
-[theme]
-base="{theme_choice.lower()}"
-primaryColor="#FF4B4B"
-backgroundColor="{ '#FFFFFF' if theme_choice == 'Light' else '#0E1117' }"
-secondaryBackgroundColor="{ '#F0F2F6' if theme_choice == 'Light' else '#262730' }"
-textColor="{ '#000000' if theme_choice == 'Light' else '#FAFAFA' }"
-'''
-        os.makedirs(".streamlit", exist_ok=True)
-        with open(".streamlit/config.toml", "w") as f:
-            f.write(config)
-        st.success("Theme updated! Please refresh your browser tab to apply.")
-        st.stop()
-
     if st.button("Reset Profile"):
         if os.path.exists("user_profile.txt"):
             os.remove("user_profile.txt")
-        user_profile["name"] = ""
-        user_profile["age"] = ""
-        user_profile["gender"] = ""
-        user_profile["location"] = ""
+        user_profile.update({"name": "", "age": "", "gender": "", "location": ""})
         st.session_state.started = False
         st.session_state.chat_history = []
         st.rerun()
@@ -82,19 +53,19 @@ textColor="{ '#000000' if theme_choice == 'Light' else '#FAFAFA' }"
         with st.form("profile_form"):
             name = st.text_input("Your Name", value=user_profile["name"])
             age = st.number_input("Your Age", min_value=1, max_value=120, step=1)
-            gender = st.selectbox(
-                "Gender", ["Male", "Female", "Other"],
-                index=["Male", "Female", "Other"].index(user_profile["gender"]) if user_profile["gender"] else 0
-            )
+            gender = st.selectbox("Gender", ["Male", "Female", "Other"],
+                index=["Male", "Female", "Other"].index(user_profile["gender"]) if user_profile["gender"] else 0)
             submitted = st.form_submit_button("Start")
 
         if submitted:
-            user_profile["name"] = name
-            user_profile["age"] = str(age)
-            user_profile["gender"] = gender
+            user_profile.update({
+                "name": name,
+                "age": str(age),
+                "gender": gender,
+                "location": try_get_location()
+            })
             context_info["time"] = get_time()
-            context_info["location"] = try_get_location()
-            user_profile["location"] = context_info["location"]
+            context_info["location"] = user_profile["location"]
             save_profile()
             st.session_state.started = True
             st.session_state.chat_history = []
@@ -135,12 +106,12 @@ if st.session_state.started:
         with st.chat_message("user"):
             st.markdown(user_input)
 
-        chat_context = ""
-        for role, msg in st.session_state.chat_history[-10:]:
-            chat_context += f"{'User' if role == 'user' else 'Assistant'}: {msg}\n"
-        chat_context += f"User: {user_input}"
+        chat_context = f"User: {user_input}"
 
-        reply = asyncio.run(run_agent(agent, chat_context))
+        try:
+            reply = asyncio.run(run_agent(agent, chat_context))
+        except Exception:
+            reply = "I'm sorry, the assistant is currently busy or rate-limited. Please try again shortly."
 
         with st.chat_message("bot"):
             st.markdown(f"<div style='font-size: 15px; max-width: 100%;'>{reply}</div>", unsafe_allow_html=True)
