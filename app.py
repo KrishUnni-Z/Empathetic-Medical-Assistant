@@ -2,7 +2,7 @@ import streamlit as st
 import asyncio
 import os
 from core import (
-    get_time, get_location, get_emotion, load_profile, save_profile,
+    get_time, try_get_location, get_emotion, load_profile, save_profile,
     user_profile, context_info
 )
 from chat_agents import (
@@ -10,11 +10,11 @@ from chat_agents import (
     appointment_agent, conclusion_agent, run_agent
 )
 
-# ----------------- Setup -----------------
+# Setup
 st.set_page_config(page_title="Empathetic Medical Assistant", layout="wide")
 load_profile()
 
-# ----------------- UI Styling -----------------
+# UI Styling
 st.markdown(
     '''
     <style>
@@ -33,17 +33,16 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# ----------------- Session -----------------
+# Session State
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "started" not in st.session_state:
     st.session_state.started = False
 
-# ----------------- Sidebar -----------------
+# Sidebar
 with st.sidebar:
     st.markdown("### Profile")
 
-    # Theme toggle
     theme_choice = st.radio("Theme", ["Dark", "Light"], index=0)
     if "theme" not in st.session_state:
         st.session_state.theme = theme_choice
@@ -61,16 +60,16 @@ textColor="{ '#000000' if theme_choice == 'Light' else '#FAFAFA' }"
         os.makedirs(".streamlit", exist_ok=True)
         with open(".streamlit/config.toml", "w") as f:
             f.write(config)
-        st.success("✅ Theme updated! Please **refresh your browser tab** (Ctrl + R) to apply.")
+        st.success("Theme updated! Please refresh your browser tab to apply.")
         st.stop()
 
-    # Reset / clear buttons
     if st.button("Reset Profile"):
         if os.path.exists("user_profile.txt"):
             os.remove("user_profile.txt")
         user_profile["name"] = ""
         user_profile["age"] = ""
         user_profile["gender"] = ""
+        user_profile["location"] = ""
         st.session_state.started = False
         st.session_state.chat_history = []
         st.rerun()
@@ -79,7 +78,6 @@ textColor="{ '#000000' if theme_choice == 'Light' else '#FAFAFA' }"
         st.session_state.chat_history = []
         st.rerun()
 
-    # Profile form
     if not st.session_state.started:
         with st.form("profile_form"):
             name = st.text_input("Your Name", value=user_profile["name"])
@@ -95,23 +93,26 @@ textColor="{ '#000000' if theme_choice == 'Light' else '#FAFAFA' }"
             user_profile["age"] = str(age)
             user_profile["gender"] = gender
             context_info["time"] = get_time()
-            context_info["location"] = get_location()
+            context_info["location"] = try_get_location()
+            user_profile["location"] = context_info["location"]
             save_profile()
             st.session_state.started = True
             st.session_state.chat_history = []
             st.rerun()
     else:
-        st.markdown(f"- **Name:** {user_profile['name']}")
-        st.markdown(f"- **Age:** {user_profile['age']}")
-        st.markdown(f"- **Gender:** {user_profile['gender']}")
+        st.markdown(f"- Name: {user_profile['name']}")
+        st.markdown(f"- Age: {user_profile['age']}")
+        st.markdown(f"- Gender: {user_profile['gender']}")
+        if user_profile["location"]:
+            st.markdown(f"- Location: {user_profile['location']}")
 
-# ----------------- Main Interface -----------------
+# Main Interface
 st.title("Empathetic Medical Assistant")
 st.markdown("*This assistant is powered by AI and is not a substitute for professional medical advice.*")
 
-if st.session_state.get("started", False):
+if st.session_state.started:
     if len(st.session_state.chat_history) == 0:
-        st.markdown(f"👋 Welcome, **{user_profile['name']}**! Type how you're feeling to begin the conversation.")
+        st.markdown(f"Welcome, {user_profile['name']}! Type how you're feeling to begin the conversation.")
 
     for role, message in st.session_state.chat_history:
         with st.chat_message(role):
@@ -147,7 +148,6 @@ if st.session_state.get("started", False):
         st.session_state.chat_history.append(("user", user_input))
         st.session_state.chat_history.append(("bot", reply))
 
-    # ----------------- Get Support -----------------
     if st.button("Get Support"):
         with st.chat_message("bot"):
             st.write("Let me help you with that.")
@@ -159,11 +159,11 @@ if st.session_state.get("started", False):
             st.markdown("Would you like to end this session with a final message, or continue talking?")
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("🛑 End Chat"):
+                if st.button("End Chat"):
                     final_reply = asyncio.run(run_agent(conclusion_agent(), ""))
                     with st.chat_message("bot"):
                         st.markdown(f"<div style='font-size: 15px'>{final_reply}</div>", unsafe_allow_html=True)
                     st.session_state.chat_history.append(("bot", final_reply))
             with col2:
-                if st.button("🔁 Continue Talking"):
+                if st.button("Continue Talking"):
                     st.rerun()
