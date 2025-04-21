@@ -10,3 +10,4 @@ openai-agents
 openai-agents[viz]
 azure-ai-inference~=1.0.0b8
 pillow 
+streamlit-javascript
