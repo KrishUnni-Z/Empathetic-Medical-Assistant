@@ -1,18 +1,16 @@
 import os
-import streamlit as st
 import requests
 from datetime import datetime
 from transformers import pipeline
+from streamlit_javascript import st_javascript
 
 # Emotion classifier
 emotion_classifier = pipeline("text-classification", model="bhadresh-savani/bert-base-go-emotion", top_k=1)
 
-# Paths
+# User profile and context
 profile_path = "user_profile.txt"
 emotion_log_path = "emotion_log.txt"
-
-# Global state
-user_profile = {"name": "", "age": "", "gender": ""}
+user_profile = {"name": "", "age": "", "gender": "", "location": ""}
 context_info = {"time": "", "location": "", "emotion": ""}
 
 def load_profile():
@@ -21,32 +19,42 @@ def load_profile():
             lines = f.read().splitlines()
             if len(lines) >= 3:
                 user_profile["name"], user_profile["age"], user_profile["gender"] = lines[:3]
+            if len(lines) >= 4:
+                user_profile["location"] = lines[3]
 
 def save_profile():
     with open(profile_path, "w") as f:
-        f.write(f"{user_profile['name']}\n{user_profile['age']}\n{user_profile['gender']}")
+        f.write(f"{user_profile['name']}\n{user_profile['age']}\n{user_profile['gender']}\n{user_profile.get('location', '')}")
 
 def get_time():
     return datetime.now().strftime("%A, %I:%M %p")
 
-def get_location():
-    try:
-        res = requests.get("https://ipinfo.io/json").json()
-        return res.get("city", "") + ", " + res.get("region", "")
-    except:
-        return "Unknown location"
+def try_get_location():
+    coords = st_javascript("""
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        window.parent.postMessage({ lat: latitude, lon: longitude }, "*");
+      },
+      (err) => {
+        window.parent.postMessage({ error: err.message }, "*");
+      }
+    );
+    """, key="geo_attempt")
 
-def get_weather():
+    if coords and isinstance(coords, dict) and "lat" in coords:
+        return get_city_from_coords(coords["lat"], coords["lon"])
+    return ""
+
+def get_city_from_coords(lat, lon):
     try:
-        key = st.secrets["OPENWEATHER_API_KEY"]
-        loc = get_location().split(",")[0]
-        weather_url = f"http://api.openweathermap.org/data/2.5/weather?q={loc}&appid={key}&units=metric"
-        weather_data = requests.get(weather_url).json()
-        desc = weather_data['weather'][0]['description']
-        temp = weather_data['main']['temp']
-        return f"{desc}, {temp}°C"
+        res = requests.get(f"https://geocode.maps.co/reverse?lat={lat}&lon={lon}")
+        data = res.json()
+        city = data.get("address", {}).get("city") or data.get("address", {}).get("town")
+        state = data.get("address", {}).get("state", "")
+        return f"{city}, {state}".strip(", ")
     except:
-        return "weather unavailable"
+        return ""
 
 def get_emotion(text):
     try:
