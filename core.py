@@ -27,10 +27,16 @@ def save_profile():
         f.write(f"{user_profile['name']}\n{user_profile['age']}\n{user_profile['gender']}\n{user_profile.get('location', '')}")
 
 def get_time():
-    return datetime.now().strftime("%A, %I:%M %p")
+    js_code = """
+    const now = new Date();
+    const options = { weekday: 'long', hour: '2-digit', minute: '2-digit', hour12: true };
+    const formatted = now.toLocaleString('en-US', options);
+    window.parent.postMessage(formatted, '*');
+    """
+    return st_javascript(js_code, key="get_local_time") or "Local time unavailable"
 
 def try_get_location():
-    coords = st_javascript("""
+    js_code = """
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const { latitude, longitude } = pos.coords;
@@ -40,8 +46,8 @@ def try_get_location():
         window.parent.postMessage({ error: err.message }, "*");
       }
     );
-    """, key="geo_attempt")
-
+    """
+    coords = st_javascript(js_code, key="geo_location")
     if coords and isinstance(coords, dict) and "lat" in coords:
         return get_city_from_coords(coords["lat"], coords["lon"])
     return ""
