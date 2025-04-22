@@ -1,15 +1,15 @@
 import streamlit as st
 import asyncio
 import os
+import streamlit.components.v1 as components
 from core import (
-    get_time, try_get_location, get_emotion, load_profile, save_profile,
+    get_time, get_emotion, load_profile, save_profile,
     user_profile, context_info
 )
 from chat_agents import (
     welcome_agent, threat_agent, chat_agent,
     appointment_agent, conclusion_agent, run_agent
 )
-import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Empathetic Medical Assistant", layout="wide")
 load_profile()
@@ -34,7 +34,29 @@ if "chat_history" not in st.session_state:
 if "started" not in st.session_state:
     st.session_state.started = False
 
-# Sidebar
+# --- Inject JS to try browser location ---
+components.html("""
+<script>
+navigator.geolocation.getCurrentPosition(
+    function(pos) {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        const loc = lat.toFixed(2) + "," + lon.toFixed(2);
+        const input = window.parent.document.getElementById("location-input");
+        if (input) {
+            input.value = loc;
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+    },
+    function(err) {
+        console.log("Geolocation error:", err.message);
+    }
+);
+</script>
+<input type="hidden" id="location-input">
+""", height=0)
+
+# --- Sidebar profile form ---
 with st.sidebar:
     st.markdown("### Profile")
 
@@ -55,7 +77,13 @@ with st.sidebar:
             name = st.text_input("Your Name", value=user_profile["name"])
             age = st.number_input("Your Age", min_value=1, max_value=120, step=1)
             gender = st.selectbox("Gender", ["Male", "Female", "Other"],
-                index=["Male", "Female", "Other"].index(user_profile["gender"]) if user_profile["gender"] else 0)
+                                  index=["Male", "Female", "Other"].index(user_profile["gender"]) if user_profile["gender"] else 0)
+
+            js_location = st.text_input("Detected Location (auto)", key="location-input")
+            manual_location = st.text_input("Or enter your location manually")
+
+            final_location = js_location if js_location else manual_location
+
             submitted = st.form_submit_button("Start")
 
         if submitted:
@@ -63,7 +91,7 @@ with st.sidebar:
                 "name": name,
                 "age": str(age),
                 "gender": gender,
-                "location": try_get_location()
+                "location": final_location if final_location else "Not provided"
             })
             context_info["time"] = get_time()
             context_info["location"] = user_profile["location"]
@@ -78,39 +106,30 @@ with st.sidebar:
         if user_profile["location"]:
             st.markdown(f"- Location: {user_profile['location']}")
 
-# Main Interface
+# --- Main UI ---
 st.title("Empathetic Medical Assistant")
 st.markdown("*This assistant is powered by AI and is not a substitute for professional medical advice.*")
 
-# Context Display
+# Session context
 st.markdown("#### Session Context")
-if user_profile.get("location"):
-    st.markdown(f"**Detected Location:** {user_profile['location']}")
-else:
-    st.markdown("*Location not detected*")
+st.markdown(f"**Location:** {user_profile['location'] or 'Not provided'}")
+st.markdown(f"**Local Time:** {context_info.get('time') or 'Unavailable'}")
 
-if context_info.get("time"):
-    st.markdown(f"**Local Time (from browser):** {context_info['time']}")
-else:
-    st.markdown("*Time unavailable*")
-
-# Live Clock
 components.html("""
-    <div style='font-size:18px; margin-top: 10px;'>
-        <b>Live Clock:</b> <span id='clock'></span>
-    </div>
-    <script>
-        function updateClock() {
-            const now = new Date();
-            const timeString = now.toLocaleTimeString();
-            document.getElementById('clock').textContent = timeString;
-        }
-        setInterval(updateClock, 1000);
-        updateClock();
-    </script>
+<div style='font-size:18px; margin-top: 10px;'>
+    <b>Live Clock:</b> <span id='clock'></span>
+</div>
+<script>
+    function updateClock() {
+        const now = new Date();
+        document.getElementById('clock').textContent = now.toLocaleTimeString();
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+</script>
 """, height=40)
 
-# Chat UI
+# --- Chatbot Interface ---
 if st.session_state.started:
     if len(st.session_state.chat_history) == 0:
         st.markdown(f"Welcome, {user_profile['name']}! Type how you're feeling to begin the conversation.")
@@ -137,14 +156,13 @@ if st.session_state.started:
             st.markdown(user_input)
 
         chat_context = f"User: {user_input}"
-
         try:
             reply = asyncio.run(run_agent(agent, chat_context))
         except Exception:
             reply = "I'm sorry, the assistant is currently busy or rate-limited. Please try again shortly."
 
         with st.chat_message("bot"):
-            st.markdown(f"<div style='font-size: 15px; max-width: 100%;'>{reply}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-size: 15px'>{reply}</div>", unsafe_allow_html=True)
 
         st.session_state.chat_history.append(("user", user_input))
         st.session_state.chat_history.append(("bot", reply))
@@ -157,15 +175,11 @@ if st.session_state.started:
             st.session_state.chat_history.append(("bot", support_reply))
 
         st.markdown("Would you like to end this session with a final message, or continue talking?")
-        end = st.button("End Chat")
-        cont = st.button("Continue Talking")
-
-        if end:
+        if st.button("End Chat"):
             with st.chat_message("bot"):
                 final_reply = asyncio.run(run_agent(conclusion_agent(), ""))
                 st.markdown(f"<div style='font-size: 15px'>{final_reply}</div>", unsafe_allow_html=True)
             st.session_state.chat_history.append(("bot", final_reply))
             st.session_state.started = False
-
-        elif cont:
+        elif st.button("Continue Talking"):
             st.rerun()
