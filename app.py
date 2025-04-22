@@ -9,6 +9,7 @@ from chat_agents import (
     welcome_agent, threat_agent, chat_agent,
     appointment_agent, conclusion_agent, run_agent
 )
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Empathetic Medical Assistant", layout="wide")
 load_profile()
@@ -77,10 +78,39 @@ with st.sidebar:
         if user_profile["location"]:
             st.markdown(f"- Location: {user_profile['location']}")
 
-# Main interface
+# Main Interface
 st.title("Empathetic Medical Assistant")
 st.markdown("*This assistant is powered by AI and is not a substitute for professional medical advice.*")
 
+# Context Display
+st.markdown("#### Session Context")
+if user_profile.get("location"):
+    st.markdown(f"**Detected Location:** {user_profile['location']}")
+else:
+    st.markdown("*Location not detected*")
+
+if context_info.get("time"):
+    st.markdown(f"**Local Time (from browser):** {context_info['time']}")
+else:
+    st.markdown("*Time unavailable*")
+
+# Live Clock
+components.html("""
+    <div style='font-size:18px; margin-top: 10px;'>
+        <b>Live Clock:</b> <span id='clock'></span>
+    </div>
+    <script>
+        function updateClock() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString();
+            document.getElementById('clock').textContent = timeString;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+    </script>
+""", height=40)
+
+# Chat UI
 if st.session_state.started:
     if len(st.session_state.chat_history) == 0:
         st.markdown(f"Welcome, {user_profile['name']}! Type how you're feeling to begin the conversation.")
@@ -135,7 +165,7 @@ if st.session_state.started:
                 final_reply = asyncio.run(run_agent(conclusion_agent(), ""))
                 st.markdown(f"<div style='font-size: 15px'>{final_reply}</div>", unsafe_allow_html=True)
             st.session_state.chat_history.append(("bot", final_reply))
-            st.session_state.started = False  # End session
+            st.session_state.started = False
 
         elif cont:
             st.rerun()
