@@ -76,6 +76,9 @@ with st.sidebar:
 st.title("Empathetic Medical Assistant")
 st.markdown("*AI-powered assistant. Not a substitute for professional medical advice.*")
 
+def get_safe_moderation_context(reason):
+    return f"The user may need help related to {reason}. Please respond with a calm and supportive message urging them to talk to someone or seek help."
+
 if st.session_state.get("started", False):
     if len(st.session_state.chat_history) == 0:
         st.markdown(f"👋 Welcome, **{user_profile['name']}**! How are you feeling today?")
@@ -107,7 +110,6 @@ if st.session_state.get("started", False):
             ) + f"\nUser: {user_input}"
 
             try:
-                # Attempt to generate a reply
                 reply = asyncio.run(run_agent(agent, chat_context))
 
             except Exception as e:
@@ -126,12 +128,12 @@ if st.session_state.get("started", False):
                 except Exception:
                     reason = "moderation_unknown"
 
-                # Show a user-facing warning
                 with st.chat_message("bot"):
                     st.warning("Your message triggered safety moderation. You're not alone — here's something that might help.")
 
                 fallback_agent = threat_agent(f"Azure moderation triggered: {reason}")
-                reply = asyncio.run(run_agent(fallback_agent, chat_context))
+                safe_context = get_safe_moderation_context(reason)
+                reply = asyncio.run(run_agent(fallback_agent, safe_context))
 
             with st.chat_message("bot"):
                 st.markdown(f"<div style='font-size: 15px'>{reply}</div>", unsafe_allow_html=True)
