@@ -4,7 +4,7 @@ import os
 import json
 from core import (
     get_time, get_location, get_emotion, load_profile, save_profile,
-    user_profile, context_info, is_crisis_message  # CRISIS PATCH
+    user_profile, context_info
 )
 from chat_agents import (
     welcome_agent, threat_agent, chat_agent,
@@ -22,6 +22,7 @@ if "started" not in st.session_state:
 detected_location = get_location()
 detected_time = get_time()
 
+# ---------------- Sidebar ----------------
 with st.sidebar:
     st.markdown("### Profile")
 
@@ -67,6 +68,7 @@ with st.sidebar:
         st.markdown(f"- **Location:** {context_info['location'] or 'Unknown'}")
         st.markdown(f"- **Time:** {context_info['time'] or 'Unavailable'}")
 
+# ---------------- Chat UI ----------------
 st.title("Empathetic Medical Assistant")
 st.markdown("*AI-powered assistant. Not a substitute for professional medical advice.*")
 
@@ -84,14 +86,13 @@ if st.session_state.get("started", False):
         emotion = get_emotion(user_input)
         context_info["emotion"] = emotion
 
-        # CRISIS PATCH START
-        if is_crisis_message(user_input, emotion):
-            agent = threat_agent("crisis")
-        elif len(st.session_state.chat_history) == 0:
-            agent = welcome_agent()
-        else:
-            agent = chat_agent()
-        # CRISIS PATCH END
+        agent = (
+            threat_agent(emotion)
+            if len(st.session_state.chat_history) == 0 and emotion in ["despair", "suicidal", "fear", "anger", "sadness"]
+            else welcome_agent()
+            if len(st.session_state.chat_history) == 0
+            else chat_agent()
+        )
 
         with st.chat_message("user"):
             st.markdown(user_input)
@@ -120,7 +121,7 @@ if st.session_state.get("started", False):
                 reason = "moderation_unknown"
 
             fallback = threat_agent(f"Azure moderation triggered: {reason}")
-            reply = asyncio.run(run_agent(fallback, chat_context))
+            reply = asyncio.run(run_agent(fallback, ""))
 
         with st.chat_message("bot"):
             st.markdown(f"<div style='font-size: 15px'>{reply}</div>", unsafe_allow_html=True)
@@ -128,15 +129,23 @@ if st.session_state.get("started", False):
         st.session_state.chat_history.append(("user", user_input))
         st.session_state.chat_history.append(("bot", reply))
 
+    # 📞 Get Support
     if st.button("📞 Get Support"):
         support_reply = asyncio.run(run_agent(appointment_agent(), ""))
         with st.chat_message("bot"):
             st.markdown(f"<div style='font-size: 15px'>{support_reply}</div>", unsafe_allow_html=True)
         st.session_state.chat_history.append(("bot", support_reply))
 
+    # 🛑 End Chat and clear profile
     if st.button("🛑 End Chat"):
         final_reply = asyncio.run(run_agent(conclusion_agent(), ""))
         with st.chat_message("bot"):
             st.markdown(f"<div style='font-size: 15px'>{final_reply}</div>", unsafe_allow_html=True)
         st.session_state.chat_history.append(("bot", final_reply))
         st.session_state.started = False
+
+        # Clear profile + file
+        user_profile.update({"name": "", "age": "", "gender": ""})
+        if os.path.exists("user_profile.txt"):
+            os.remove("user_profile.txt")
+        st.rerun()
