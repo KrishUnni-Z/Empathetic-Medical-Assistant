@@ -109,16 +109,12 @@ if st.session_state.get("started", False):
             except Exception as e:
                 reason = "moderation_flagged"
                 try:
-                    error_str = str(e)
-                    if "content_filter_result" in error_str:
-                        json_part = error_str.split("{", 1)[1]
-                        json_str = "{" + json_part.replace("'", '"')
-                        error_data = json.loads(json_str)
-                        filters = error_data["error"]["innererror"]["content_filter_result"]
-                        for category, result in filters.items():
-                            if result.get("filtered"):
-                                reason = category
-                                break
+                    error_obj = json.loads(str(e).split(" - ", 1)[1])
+                    filters = error_obj["error"]["innererror"]["content_filter_result"]
+                    for category, result in filters.items():
+                        if result.get("filtered"):
+                            reason = category
+                            break
                 except Exception:
                     reason = "moderation_unknown"
 
