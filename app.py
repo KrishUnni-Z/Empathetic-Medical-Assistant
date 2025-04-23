@@ -51,22 +51,22 @@ with st.sidebar:
             name = st.text_input("Your Name", value=user_profile["name"])
             age = st.text_input("Your Age", value=user_profile["age"])
             gender = st.selectbox("Gender", ["Male", "Female", "Other"],
-                index=["Male", "Female", "Other"].index(user_profile["gender"]) if user_profile["gender"] else 0)
+                                  index=["Male", "Female", "Other"].index(user_profile["gender"]) if user_profile["gender"] else 0)
             submitted = st.form_submit_button("Start")
 
-        if submitted and name.strip() and age.strip() and gender.strip():
-            user_profile["name"] = name
-            user_profile["age"] = age
-            user_profile["gender"] = gender
-            context_info["location"] = get_location()
-            context_info["time"] = get_time()
-            save_profile()
-            st.session_state.started = True
-            st.session_state.chat_history = []
-            st.rerun()
-        elif submitted:
-            st.warning("Please complete all fields before starting.")
-
+        if submitted:
+            if name.strip() and age.strip() and gender.strip():
+                user_profile["name"] = name.strip()
+                user_profile["age"] = age.strip()
+                user_profile["gender"] = gender.strip()
+                context_info["location"] = get_location()
+                context_info["time"] = get_time()
+                save_profile()
+                st.session_state.started = True
+                st.session_state.chat_history = []
+                st.rerun()
+            else:
+                st.warning("Please complete all fields before continuing.")
     else:
         st.markdown(f"- **Name:** {user_profile['name']}")
         st.markdown(f"- **Age:** {user_profile['age']}")
@@ -89,6 +89,9 @@ if st.session_state.get("started", False):
     user_input = st.chat_input("Type your message:")
 
     if user_input:
+        with st.chat_message("user"):
+            st.markdown(user_input)
+
         emotion = get_emotion(user_input)
         context_info["emotion"] = emotion
 
@@ -100,18 +103,15 @@ if st.session_state.get("started", False):
             else chat_agent()
         )
 
-        with st.chat_message("user"):
-            st.markdown(user_input)
-
-        chat_context = ""
-        for role, msg in st.session_state.chat_history[-10:]:
-            chat_context += f"{'User' if role == 'user' else 'Assistant'}: {msg}\n"
-        chat_context += f"User: {user_input}"
+        chat_context = "\n".join([
+            f"{'User' if role == 'user' else 'Assistant'}: {msg}"
+            for role, msg in st.session_state.chat_history[-10:]
+        ]) + f"\nUser: {user_input}"
 
         try:
             reply = asyncio.run(run_agent(agent, chat_context))
         except Exception:
-            fallback = asyncio.run(run_agent(threat_agent(), chat_context))
+            fallback = asyncio.run(run_agent(threat_agent("moderation fallback"), chat_context))
             reply = fallback
 
         with st.chat_message("bot"):
@@ -121,27 +121,17 @@ if st.session_state.get("started", False):
         st.session_state.chat_history.append(("bot", reply))
 
     col1, col2 = st.columns(2)
-    chk=0
     with col1:
         if st.button("📞 Get Support"):
-            chk=1
+            support_reply = asyncio.run(run_agent(appointment_agent(), ""))
+            with st.chat_message("bot"):
+                st.markdown(f"<div style='font-size: 15px'>{support_reply}</div>", unsafe_allow_html=True)
+            st.session_state.chat_history.append(("bot", support_reply))
+
     with col2:
         if st.button("🛑 End Chat"):
-            chk=2
-
-
-    if(chk==1 or chk==2):
-        if chk==1:
-            with st.chat_message("bot"):
-                    st.write("Let me help you with that.")
-                    support_reply = asyncio.run(run_agent(appointment_agent(), ""))
-                    st.markdown(f"<div style='font-size: 15px'>{support_reply}</div>", unsafe_allow_html=True)
-                    st.session_state.chat_history.append(("bot", support_reply))
-        elif chk==2:
             final_reply = asyncio.run(run_agent(conclusion_agent(), ""))
             with st.chat_message("bot"):
                 st.markdown(f"<div style='font-size: 15px'>{final_reply}</div>", unsafe_allow_html=True)
             st.session_state.chat_history.append(("bot", final_reply))
             st.session_state.started = False
-            
-        
