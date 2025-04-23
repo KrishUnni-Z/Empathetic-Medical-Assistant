@@ -1,3 +1,4 @@
+# app.py
 import streamlit as st
 import asyncio
 import os
@@ -37,7 +38,6 @@ with st.sidebar:
         if os.path.exists("user_profile.txt"):
             os.remove("user_profile.txt")
         user_profile.update({"name": "", "age": "", "gender": ""})
-        context_info.update({"location": "", "time": "", "emotion": ""})
         st.session_state.started = False
         st.session_state.chat_history = []
         st.rerun()
@@ -52,20 +52,21 @@ with st.sidebar:
             age = st.text_input("Your Age", value=user_profile["age"])
             gender = st.selectbox("Gender", ["Male", "Female", "Other"],
                 index=["Male", "Female", "Other"].index(user_profile["gender"]) if user_profile["gender"] else 0)
-            location = st.text_input("Your Location (City, Region)", value=get_location())
-            time = st.text_input("Current Local Time (e.g., Wednesday, 12:00 PM)", value=get_time())
             submitted = st.form_submit_button("Start")
 
-        if submitted:
+        if submitted and name.strip() and age.strip() and gender.strip():
             user_profile["name"] = name
             user_profile["age"] = age
             user_profile["gender"] = gender
-            context_info["location"] = location
-            context_info["time"] = time
+            context_info["location"] = get_location()
+            context_info["time"] = get_time()
             save_profile()
             st.session_state.started = True
             st.session_state.chat_history = []
             st.rerun()
+        elif submitted:
+            st.warning("Please complete all fields before starting.")
+
     else:
         st.markdown(f"- **Name:** {user_profile['name']}")
         st.markdown(f"- **Age:** {user_profile['age']}")
@@ -73,7 +74,7 @@ with st.sidebar:
         st.markdown(f"- **Location:** {context_info['location'] or 'Unknown'}")
         st.markdown(f"- **Time:** {context_info['time'] or 'Unavailable'}")
 
-# Main
+# Main Interface
 st.title("Empathetic Medical Assistant")
 st.markdown("*This assistant is powered by AI and is not a substitute for professional medical advice.*")
 
@@ -102,13 +103,16 @@ if st.session_state.get("started", False):
         with st.chat_message("user"):
             st.markdown(user_input)
 
-        chat_context = "\n".join([f"{'User' if r=='user' else 'Assistant'}: {m}" for r, m in st.session_state.chat_history[-10:]])
-        chat_context += f"\nUser: {user_input}"
+        chat_context = ""
+        for role, msg in st.session_state.chat_history[-10:]:
+            chat_context += f"{'User' if role == 'user' else 'Assistant'}: {msg}\n"
+        chat_context += f"User: {user_input}"
 
         try:
             reply = asyncio.run(run_agent(agent, chat_context))
         except Exception:
-            reply = asyncio.run(run_agent(threat_agent("moderation block"), chat_context))
+            fallback = asyncio.run(run_agent(threat_agent(), chat_context))
+            reply = fallback
 
         with st.chat_message("bot"):
             st.markdown(f"<div style='font-size: 15px; max-width: 100%;'>{reply}</div>", unsafe_allow_html=True)
@@ -120,6 +124,7 @@ if st.session_state.get("started", False):
     with col1:
         if st.button("📞 Get Support"):
             with st.chat_message("bot"):
+                st.write("Let me help you with that.")
                 support_reply = asyncio.run(run_agent(appointment_agent(), ""))
                 st.markdown(f"<div style='font-size: 15px'>{support_reply}</div>", unsafe_allow_html=True)
                 st.session_state.chat_history.append(("bot", support_reply))
