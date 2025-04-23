@@ -89,7 +89,7 @@ if st.session_state.get("started", False):
 
         high_risk_emotions = ["despair", "suicidal", "fear", "anger", "sadness"]
         if emotion in high_risk_emotions:
-            agent = threat_agent(user_input)
+            agent = threat_agent(emotion)
         elif len(st.session_state.chat_history) == 0:
             agent = welcome_agent()
         else:
@@ -105,12 +105,6 @@ if st.session_state.get("started", False):
 
         try:
             reply = asyncio.run(run_agent(agent, chat_context))
-            blocked_phrases = [
-                "i’m sorry", "i cannot help", "i can’t assist",
-                "not permitted", "against policy"
-            ]
-            if not reply or any(p in reply.lower() for p in blocked_phrases):
-                raise ValueError("Likely moderation blocked")
         except Exception as e:
             reason = "moderation_flagged"
             try:
@@ -137,7 +131,9 @@ if st.session_state.get("started", False):
         st.session_state.chat_history.append(("bot", reply))
 
     if st.button("📞 Get Support"):
-        support_reply = asyncio.run(run_agent(appointment_agent(), ""))
+        emotion = context_info.get("emotion", "neutral")
+        support_prompt = f"The user is feeling {emotion}. Provide a helpful list of mental health services or hotlines available in Australia."
+        support_reply = asyncio.run(run_agent(appointment_agent(emotion), support_prompt))
         with st.chat_message("bot"):
             st.markdown(f"<div style='font-size: 15px'>{support_reply}</div>", unsafe_allow_html=True)
         st.session_state.chat_history.append(("bot", support_reply))
