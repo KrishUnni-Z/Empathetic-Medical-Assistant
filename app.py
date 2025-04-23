@@ -121,18 +121,27 @@ if st.session_state.get("started", False):
         st.session_state.chat_history.append(("bot", reply))
 
     col1, col2 = st.columns(2)
+    chk=0
     with col1:
         if st.button("📞 Get Support"):
-            with st.chat_message("bot"):
-                st.write("Let me help you with that.")
-                support_reply = asyncio.run(run_agent(appointment_agent(), ""))
-                st.markdown(f"<div style='font-size: 15px'>{support_reply}</div>", unsafe_allow_html=True)
-                st.session_state.chat_history.append(("bot", support_reply))
-
+            chk=1
     with col2:
         if st.button("🛑 End Chat"):
+            chl=2
+
+
+    if(chk==1||chk==2):
+        if chk==1:
+            with st.chat_message("bot"):
+                    st.write("Let me help you with that.")
+                    support_reply = asyncio.run(run_agent(appointment_agent(), ""))
+                    st.markdown(f"<div style='font-size: 15px'>{support_reply}</div>", unsafe_allow_html=True)
+                    st.session_state.chat_history.append(("bot", support_reply))
+        elif chk==2:
             final_reply = asyncio.run(run_agent(conclusion_agent(), ""))
             with st.chat_message("bot"):
                 st.markdown(f"<div style='font-size: 15px'>{final_reply}</div>", unsafe_allow_html=True)
             st.session_state.chat_history.append(("bot", final_reply))
             st.session_state.started = False
+            
+        
