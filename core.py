@@ -1,4 +1,3 @@
-# core.py
 import os
 import requests
 from datetime import datetime
@@ -29,15 +28,15 @@ def get_time():
 def get_location():
     try:
         res = requests.get("https://ipinfo.io/json").json()
-        return res.get("city", "") + ", " + res.get("region", "")
+        return f"{res.get('city', '')}, {res.get('region', '')}"
     except:
-        return "Unknown location"
+        return "Unknown"
 
 def get_emotion(text):
     try:
-        results = emotion_classifier(text)
-        label = results[0]["label"]
-        score = results[0]["score"]
+        result = emotion_classifier(text)
+        label = result[0]["label"]
+        score = result[0]["score"]
         log_emotion(label, score)
         return label
     except:
@@ -45,7 +44,7 @@ def get_emotion(text):
 
 def log_emotion(label, score):
     try:
-        with open(emotion_log_path, "a") as log:
-            log.write(f"{datetime.now().isoformat()} - Emotion: {label}, Confidence: {score:.2f}\n")
+        with open(emotion_log_path, "a") as f:
+            f.write(f"{datetime.now().isoformat()} - Emotion: {label}, Confidence: {score:.2f}\n")
     except:
         pass
