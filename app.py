@@ -1,6 +1,7 @@
 import streamlit as st
 import asyncio
 import os
+import json
 from core import (
     get_time, get_location, get_emotion, load_profile, save_profile,
     user_profile, context_info
@@ -18,7 +19,7 @@ if "chat_history" not in st.session_state:
 if "started" not in st.session_state:
     st.session_state.started = False
 
-# Detect location/time even before form submit
+# Detect location/time before profile form
 detected_location = get_location()
 detected_time = get_time()
 
@@ -41,18 +42,20 @@ with st.sidebar:
     if not st.session_state.started:
         with st.form("profile_form"):
             name = st.text_input("Your Name", value=user_profile["name"])
-            age = st.text_input("Your Age", value=user_profile["age"])
+            age = st.number_input("Your Age", min_value=1, max_value=120,
+                                  value=int(user_profile["age"]) if user_profile["age"].isdigit() else 25)
             gender_options = ["Select", "Male", "Female", "Other"]
-            gender = st.selectbox("Gender", gender_options, index=gender_options.index(user_profile["gender"]) if user_profile["gender"] in gender_options else 0)
-            manual_location = st.text_input("Your Location (e.g. Sydney, NSW)", value=detected_location)
-            manual_time = st.text_input("Current Time (e.g. Monday, 10:30 AM)", value=detected_time)
+            gender = st.selectbox("Gender", gender_options,
+                                  index=gender_options.index(user_profile["gender"]) if user_profile["gender"] in gender_options else 0)
+            manual_location = st.text_input("Your Location", value=detected_location)
+            manual_time = st.text_input("Current Time", value=detected_time)
             submitted = st.form_submit_button("Start")
 
         if submitted:
-            if not name or not age or gender == "Select":
+            if not name or gender == "Select":
                 st.warning("Please complete all profile fields.")
             else:
-                user_profile.update({"name": name, "age": age, "gender": gender})
+                user_profile.update({"name": name, "age": str(age), "gender": gender})
                 context_info["location"] = manual_location
                 context_info["time"] = manual_time
                 save_profile()
@@ -66,13 +69,13 @@ with st.sidebar:
         st.markdown(f"- **Location:** {context_info['location'] or 'Unknown'}")
         st.markdown(f"- **Time:** {context_info['time'] or 'Unavailable'}")
 
-# Main Title
+# Title and disclaimer
 st.title("Empathetic Medical Assistant")
-st.markdown("*AI-powered assistant. Not a substitute for medical advice.*")
+st.markdown("*AI-powered assistant. Not a substitute for professional medical advice.*")
 
 if st.session_state.get("started", False):
     if len(st.session_state.chat_history) == 0:
-        st.markdown(f"👋 Welcome, **{user_profile['name']}**! Tell me how you're feeling to begin.")
+        st.markdown(f"👋 Welcome, **{user_profile['name']}**! How are you feeling today?")
 
     for role, message in st.session_state.chat_history:
         with st.chat_message(role):
@@ -84,13 +87,13 @@ if st.session_state.get("started", False):
         emotion = get_emotion(user_input)
         context_info["emotion"] = emotion
 
-        agent = (
-            threat_agent(user_input)
-            if len(st.session_state.chat_history) == 0 and emotion in ["despair", "suicidal", "fear", "anger", "sadness"]
-            else welcome_agent()
-            if len(st.session_state.chat_history) == 0
-            else chat_agent()
-        )
+        high_risk_emotions = ["despair", "suicidal", "fear", "anger", "sadness"]
+        if emotion in high_risk_emotions:
+            agent = threat_agent(user_input)
+        elif len(st.session_state.chat_history) == 0:
+            agent = welcome_agent()
+        else:
+            agent = chat_agent()
 
         with st.chat_message("user"):
             st.markdown(user_input)
@@ -102,9 +105,29 @@ if st.session_state.get("started", False):
 
         try:
             reply = asyncio.run(run_agent(agent, chat_context))
+            blocked_phrases = [
+                "i’m sorry", "i cannot help", "i can’t assist",
+                "not permitted", "against policy"
+            ]
+            if not reply or any(p in reply.lower() for p in blocked_phrases):
+                raise ValueError("Likely moderation blocked")
         except Exception as e:
-            reason = str(e)
-            fallback = threat_agent(f"moderation trigger: {reason}")
+            reason = "moderation_flagged"
+            try:
+                error_str = str(e)
+                if "content_filter_result" in error_str:
+                    json_part = error_str.split("{", 1)[1]
+                    json_str = "{" + json_part.replace("'", '"')
+                    error_data = json.loads(json_str)
+                    filters = error_data["error"]["innererror"]["content_filter_result"]
+                    for category, result in filters.items():
+                        if result.get("filtered"):
+                            reason = category
+                            break
+            except Exception:
+                reason = "moderation_unknown"
+
+            fallback = threat_agent(f"Azure moderation triggered: {reason}")
             reply = asyncio.run(run_agent(fallback, chat_context))
 
         with st.chat_message("bot"):
@@ -113,7 +136,6 @@ if st.session_state.get("started", False):
         st.session_state.chat_history.append(("user", user_input))
         st.session_state.chat_history.append(("bot", reply))
 
-    # Support & End Chat Buttons (Below chat, not in columns)
     if st.button("📞 Get Support"):
         support_reply = asyncio.run(run_agent(appointment_agent(), ""))
         with st.chat_message("bot"):
