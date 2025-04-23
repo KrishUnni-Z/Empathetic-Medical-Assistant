@@ -1,42 +1,53 @@
+# chat_agents.py
 from agents import Agent, Runner, RunConfig
 from config import MODEL_PROVIDER, model
 from core import context_info, user_profile, get_emotion
 
 def welcome_agent():
-    return Agent(name="WelcomeAgent", instructions=f"""
-    Greet {user_profile['name']} warmly. They are a {user_profile['age']} year old {user_profile['gender']}.
-    They are currently in {context_info['location']} and it is {context_info['time']}.
-    Your tone should be friendly, soft, and supportive.
-    Suggest gentle lifestyle tips, and remind them this is a safe space to talk.
-    You are not a doctor, so do not diagnose. Encourage medical follow-up for real symptoms.
-    """)
+    return Agent(
+        name="WelcomeAgent",
+        instructions=f"""
+        You are a warm and supportive assistant.
+        Greet {user_profile['name']}, a {user_profile['age']} year old {user_profile['gender']}, in a kind and calming tone.
+        It is currently {context_info['time']} in {context_info['location']}.
+        Offer simple wellness suggestions or gentle tips and let the user know this is a safe space.
+        Avoid diagnosis and always suggest professional help for serious concerns.
+        """
+    )
 
 def threat_agent(user_input=""):
     emotion = context_info.get("emotion", "fear")
-    return Agent(name="ThreatAgent", instructions=f"""
-    The user expressed potential danger or emotional crisis. Detected emotion: {emotion}.
-    Do NOT provide medical advice. Instead:
-    - Show concern
-    - Validate feelings
-    - Recommend speaking to a trusted person or helpline
-    - Reinforce safety and support
-    Time: {context_info['time']} | Location: {context_info['location']}
-    """)
+    return Agent(
+        name="ThreatAgent",
+        instructions=f"""
+        The user has expressed distress or a sensitive concern. Your tone must be non-judgmental, calming, and safety-oriented.
+        Acknowledge how they may be feeling (emotion: {emotion}) and provide supportive language such as:
+        "You are not alone", "It’s okay to feel this way", "Please talk to someone you trust or a professional".
+        Do not provide medical solutions. Always prioritize mental health support.
+        Time: {context_info['time']}, Location: {context_info['location']}
+        """
+    )
 
 def chat_agent():
-    return Agent(name="ChatAgent", instructions=f"""
-    Continue a gentle conversation with {user_profile['name']}, {user_profile['age']} years old.
-    Location: {context_info['location']}, Time: {context_info['time']}.
-    Do not repeat greetings. Offer simple supportive suggestions, tailored to time of day or weather.
-    Never diagnose or make health claims.
-    """)
+    return Agent(
+        name="ChatAgent",
+        instructions=f"""
+        Continue a kind, helpful, ongoing conversation with {user_profile['name']} ({user_profile['age']} y/o {user_profile['gender']}).
+        The user is currently at {context_info['location']} and it is {context_info['time']}.
+        Avoid repeating greetings, and suggest simple wellness tips related to hydration, rest, or calmness.
+        Avoid diagnosis. Keep the tone light, warm, and human.
+        """
+    )
 
 def appointment_agent():
-    return Agent(name="AppointmentAgent", instructions="""
-    Gently suggest ways the user can find support.
-    Mention seeing a doctor, calling a helpline, or visiting a mental health center.
-    Be non-judgmental and kind in your approach.
-    """)
+    return Agent(
+        name="AppointmentAgent",
+        instructions="""
+        Kindly help the user locate a medical or mental health professional nearby.
+        Mention ways to get help like searching for clinics, hotlines, or speaking with a trusted adult or friend.
+        Keep your tone respectful and gentle.
+        """
+    )
 
 fallback_quotes = {
     "sadness": "This too shall pass. - Unknown",
@@ -51,17 +62,30 @@ fallback_quotes = {
 def conclusion_agent():
     emotion = context_info.get("emotion", "neutral")
     quote = fallback_quotes.get(emotion, fallback_quotes["neutral"])
-    return Agent(name="ConclusionAgent", instructions=f"""
-    End the session gently. Thank the user for sharing.
-    Leave them with this motivational quote: "{quote}"
-    """)
+    return Agent(
+        name="ConclusionAgent",
+        instructions=f'''
+        Wrap up the conversation on a warm note.
+        Thank the user for opening up. Acknowledge their effort.
+        Leave them with an uplifting quote: "{quote}"
+        Keep it short, encouraging, and emotionally safe.
+        '''
+    )
 
 async def run_agent(agent, full_chat_context):
     try:
-        result = await Runner.run(agent, full_chat_context, run_config=RunConfig(model_provider=MODEL_PROVIDER, model=model))
+        result = await Runner.run(
+            agent,
+            full_chat_context,
+            run_config=RunConfig(model_provider=MODEL_PROVIDER, model=model)
+        )
         return result.final_output
     except Exception as e:
-        if "self_harm" in str(e).lower() or "moderation" in str(e).lower():
-            fallback = await Runner.run(threat_agent(), full_chat_context, run_config=RunConfig(model_provider=MODEL_PROVIDER, model=model))
+        if "moderation" in str(e).lower() or "content" in str(e).lower():
+            fallback = await Runner.run(
+                threat_agent(),
+                full_chat_context,
+                run_config=RunConfig(model_provider=MODEL_PROVIDER, model=model)
+            )
             return fallback.final_output
-        return "Sorry, the assistant couldn't respond due to technical issues. Please try again soon."
+        return "Sorry, I'm having trouble responding. Please try again shortly."
