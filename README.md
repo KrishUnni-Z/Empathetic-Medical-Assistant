@@ -60,7 +60,7 @@ You’ll need your own GitHub Azure Inference API token to run this locally.
 
 ### 1. Clone the repository
 
-git clone https://github.com/your-username/empathetic-medical-assistant.git  
+git clone https://github.com/KrishUnni-Z/empathetic-medical-assistant.git  
 cd empathetic-medical-assistant
 
 ### 2. Set up your API token in Streamlit
