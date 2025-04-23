@@ -18,11 +18,12 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "started" not in st.session_state:
     st.session_state.started = False
+if "chat_ended" not in st.session_state:
+    st.session_state.chat_ended = False
 
 detected_location = get_location()
 detected_time = get_time()
 
-# ---------------- Sidebar ----------------
 with st.sidebar:
     st.markdown("### Profile")
 
@@ -31,6 +32,7 @@ with st.sidebar:
             os.remove("user_profile.txt")
         user_profile.update({"name": "", "age": "", "gender": ""})
         st.session_state.started = False
+        st.session_state.chat_ended = False
         st.session_state.chat_history = []
         st.rerun()
 
@@ -59,6 +61,7 @@ with st.sidebar:
                 context_info["time"] = manual_time
                 save_profile()
                 st.session_state.started = True
+                st.session_state.chat_ended = False
                 st.session_state.chat_history = []
                 st.rerun()
     else:
@@ -68,7 +71,6 @@ with st.sidebar:
         st.markdown(f"- **Location:** {context_info['location'] or 'Unknown'}")
         st.markdown(f"- **Time:** {context_info['time'] or 'Unavailable'}")
 
-# ---------------- Chat UI ----------------
 st.title("Empathetic Medical Assistant")
 st.markdown("*AI-powered assistant. Not a substitute for professional medical advice.*")
 
@@ -80,74 +82,66 @@ if st.session_state.get("started", False):
         with st.chat_message(role):
             st.markdown(f"<div style='font-size: 15px'>{message}</div>", unsafe_allow_html=True)
 
-    user_input = st.chat_input("Type your message:")
+    if not st.session_state.get("chat_ended", False):
+        user_input = st.chat_input("Type your message:")
+        if user_input:
+            emotion = get_emotion(user_input)
+            context_info["emotion"] = emotion
 
-    if user_input:
-        # Emotion always checked
-        emotion = get_emotion(user_input)
-        context_info["emotion"] = emotion
+            high_risk_emotions = ["despair", "suicidal", "fear", "anger", "sadness"]
+            if emotion in high_risk_emotions:
+                agent = threat_agent(emotion)
+            elif len(st.session_state.chat_history) == 0:
+                agent = welcome_agent()
+            else:
+                agent = chat_agent()
 
-        # Emotion-based agent selection
-        if emotion in ["despair", "suicidal", "fear", "anger", "sadness"]:
-            agent = threat_agent(emotion)
-        elif len(st.session_state.chat_history) == 0:
-            agent = welcome_agent()
-        else:
-            agent = chat_agent()
+            with st.chat_message("user"):
+                st.markdown(user_input)
 
-        with st.chat_message("user"):
-            st.markdown(user_input)
+            chat_context = "\n".join(
+                f"{'User' if role == 'user' else 'Assistant'}: {msg}"
+                for role, msg in st.session_state.chat_history[-10:]
+            ) + f"\nUser: {user_input}"
 
-        # Include last 10 messages as chat context
-        chat_context = "\n".join(
-            f"{'User' if role == 'user' else 'Assistant'}: {msg}"
-            for role, msg in st.session_state.chat_history[-10:]
-        ) + f"\nUser: {user_input}"
-
-        try:
-            reply = asyncio.run(run_agent(agent, chat_context))
-        except Exception as e:
-            reason = "moderation_flagged"
             try:
-                error_str = str(e)
-                if "content_filter_result" in error_str:
-                    json_part = error_str.split("{", 1)[1]
-                    json_str = "{" + json_part.replace("'", '"')
-                    error_data = json.loads(json_str)
-                    filters = error_data["error"]["innererror"]["content_filter_result"]
-                    for category, result in filters.items():
-                        if result.get("filtered"):
-                            reason = category
-                            break
-            except Exception:
-                reason = "moderation_unknown"
+                reply = asyncio.run(run_agent(agent, chat_context))
+            except Exception as e:
+                reason = "moderation_flagged"
+                try:
+                    error_str = str(e)
+                    if "content_filter_result" in error_str:
+                        json_part = error_str.split("{", 1)[1]
+                        json_str = "{" + json_part.replace("'", '"')
+                        error_data = json.loads(json_str)
+                        filters = error_data["error"]["innererror"]["content_filter_result"]
+                        for category, result in filters.items():
+                            if result.get("filtered"):
+                                reason = category
+                                break
+                except Exception:
+                    reason = "moderation_unknown"
 
-            fallback = threat_agent(f"Azure moderation triggered: {reason}")
-            reply = asyncio.run(run_agent(fallback, ""))
+                fallback = threat_agent(f"Azure moderation triggered: {reason}")
+                reply = asyncio.run(run_agent(fallback, chat_context))
 
-        with st.chat_message("bot"):
-            st.markdown(f"<div style='font-size: 15px'>{reply}</div>", unsafe_allow_html=True)
+            with st.chat_message("bot"):
+                st.markdown(f"<div style='font-size: 15px'>{reply}</div>", unsafe_allow_html=True)
 
-        st.session_state.chat_history.append(("user", user_input))
-        st.session_state.chat_history.append(("bot", reply))
+            st.session_state.chat_history.append(("user", user_input))
+            st.session_state.chat_history.append(("bot", reply))
+    else:
+        st.info("The chat has ended. Please reset your profile to begin again.")
 
-    # 📞 Get Support
     if st.button("📞 Get Support"):
         support_reply = asyncio.run(run_agent(appointment_agent(), ""))
         with st.chat_message("bot"):
             st.markdown(f"<div style='font-size: 15px'>{support_reply}</div>", unsafe_allow_html=True)
         st.session_state.chat_history.append(("bot", support_reply))
 
-    # 🛑 End Chat and clear profile
     if st.button("🛑 End Chat"):
         final_reply = asyncio.run(run_agent(conclusion_agent(), ""))
         with st.chat_message("bot"):
             st.markdown(f"<div style='font-size: 15px'>{final_reply}</div>", unsafe_allow_html=True)
         st.session_state.chat_history.append(("bot", final_reply))
-        st.session_state.started = False
-
-        # Clear profile + file
-        user_profile.update({"name": "", "age": "", "gender": ""})
-        if os.path.exists("user_profile.txt"):
-            os.remove("user_profile.txt")
-        st.rerun()
+        st.session_state.chat_ended = True
