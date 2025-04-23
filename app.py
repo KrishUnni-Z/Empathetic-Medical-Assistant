@@ -4,7 +4,7 @@ import os
 import json
 from core import (
     get_time, get_location, get_emotion, load_profile, save_profile,
-    user_profile, context_info
+    user_profile, context_info, is_crisis_message  # CRISIS PATCH
 )
 from chat_agents import (
     welcome_agent, threat_agent, chat_agent,
@@ -84,13 +84,14 @@ if st.session_state.get("started", False):
         emotion = get_emotion(user_input)
         context_info["emotion"] = emotion
 
-        high_risk_emotions = ["despair", "suicidal", "fear", "anger", "sadness"]
-        if emotion in high_risk_emotions:
-            agent = threat_agent(emotion)
+        # CRISIS PATCH START
+        if is_crisis_message(user_input, emotion):
+            agent = threat_agent("crisis")
         elif len(st.session_state.chat_history) == 0:
             agent = welcome_agent()
         else:
             agent = chat_agent()
+        # CRISIS PATCH END
 
         with st.chat_message("user"):
             st.markdown(user_input)
