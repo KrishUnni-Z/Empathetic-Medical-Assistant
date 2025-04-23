@@ -10,6 +10,8 @@ from chat_agents import (
     welcome_agent, threat_agent, chat_agent,
     appointment_agent, conclusion_agent, run_agent
 )
+from agents import RunConfig, Runner
+from config import MODEL_PROVIDER, model
 
 st.set_page_config(page_title="Empathetic Medical Assistant", layout="wide")
 load_profile()
@@ -105,21 +107,31 @@ if st.session_state.get("started", False):
             ) + f"\nUser: {user_input}"
 
             try:
+                # Attempt to generate a reply
                 reply = asyncio.run(run_agent(agent, chat_context))
+
             except Exception as e:
                 reason = "moderation_flagged"
                 try:
-                    error_obj = json.loads(str(e).split(" - ", 1)[1])
-                    filters = error_obj["error"]["innererror"]["content_filter_result"]
-                    for category, result in filters.items():
-                        if result.get("filtered"):
-                            reason = category
-                            break
+                    error_str = str(e)
+                    if "content_filter_result" in error_str:
+                        json_part = error_str.split("{", 1)[1]
+                        json_str = "{" + json_part.replace("'", '"')
+                        error_data = json.loads(json_str)
+                        filters = error_data["error"]["innererror"]["content_filter_result"]
+                        for category, result in filters.items():
+                            if result.get("filtered"):
+                                reason = category
+                                break
                 except Exception:
                     reason = "moderation_unknown"
 
-                fallback = threat_agent(f"Azure moderation triggered: {reason}")
-                reply = asyncio.run(run_agent(fallback, chat_context))
+                # Show a user-facing warning
+                with st.chat_message("bot"):
+                    st.warning("Your message triggered safety moderation. You're not alone — here's something that might help.")
+
+                fallback_agent = threat_agent(f"Azure moderation triggered: {reason}")
+                reply = asyncio.run(run_agent(fallback_agent, chat_context))
 
             with st.chat_message("bot"):
                 st.markdown(f"<div style='font-size: 15px'>{reply}</div>", unsafe_allow_html=True)
