@@ -127,7 +127,7 @@ if st.session_state.get("started", False):
             chk=1
     with col2:
         if st.button("🛑 End Chat"):
-            chl=2
+            chk=2
 
 
     if(chk==1 or chk==2):
