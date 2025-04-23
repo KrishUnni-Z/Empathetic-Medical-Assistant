@@ -83,20 +83,22 @@ if st.session_state.get("started", False):
     user_input = st.chat_input("Type your message:")
 
     if user_input:
+        # Emotion always checked
         emotion = get_emotion(user_input)
         context_info["emotion"] = emotion
 
-        agent = (
-            threat_agent(emotion)
-            if len(st.session_state.chat_history) == 0 and emotion in ["despair", "suicidal", "fear", "anger", "sadness"]
-            else welcome_agent()
-            if len(st.session_state.chat_history) == 0
-            else chat_agent()
-        )
+        # Emotion-based agent selection
+        if emotion in ["despair", "suicidal", "fear", "anger", "sadness"]:
+            agent = threat_agent(emotion)
+        elif len(st.session_state.chat_history) == 0:
+            agent = welcome_agent()
+        else:
+            agent = chat_agent()
 
         with st.chat_message("user"):
             st.markdown(user_input)
 
+        # Include last 10 messages as chat context
         chat_context = "\n".join(
             f"{'User' if role == 'user' else 'Assistant'}: {msg}"
             for role, msg in st.session_state.chat_history[-10:]
