@@ -1,4 +1,3 @@
-# app.py
 import streamlit as st
 import asyncio
 import os
@@ -16,7 +15,11 @@ load_profile()
 
 st.markdown("""
     <style>
-    .main .block-container { max-width: 100%; padding-left: 3rem; padding-right: 3rem; }
+    .main .block-container {
+        max-width: 100%;
+        padding-left: 3rem;
+        padding-right: 3rem;
+    }
     .stChatInputContainer textarea {
         min-height: 70px !important;
         font-size: 16px !important;
@@ -30,7 +33,7 @@ if "chat_history" not in st.session_state:
 if "started" not in st.session_state:
     st.session_state.started = False
 
-# Sidebar
+# Sidebar: Profile & Controls
 with st.sidebar:
     st.markdown("### Profile")
 
@@ -50,23 +53,23 @@ with st.sidebar:
         with st.form("profile_form"):
             name = st.text_input("Your Name", value=user_profile["name"])
             age = st.text_input("Your Age", value=user_profile["age"])
-            gender = st.selectbox("Gender", ["Male", "Female", "Other"],
-                                  index=["Male", "Female", "Other"].index(user_profile["gender"]) if user_profile["gender"] else 0)
+            gender = st.selectbox(
+                "Gender", ["Male", "Female", "Other"],
+                index=["Male", "Female", "Other"].index(user_profile["gender"]) if user_profile["gender"] else 0
+            )
             submitted = st.form_submit_button("Start")
 
         if submitted:
-            if name.strip() and age.strip() and gender.strip():
-                user_profile["name"] = name.strip()
-                user_profile["age"] = age.strip()
-                user_profile["gender"] = gender.strip()
+            if not name or not age or not gender:
+                st.warning("Please complete all profile fields to proceed.")
+            else:
+                user_profile.update({"name": name, "age": age, "gender": gender})
                 context_info["location"] = get_location()
                 context_info["time"] = get_time()
                 save_profile()
                 st.session_state.started = True
                 st.session_state.chat_history = []
                 st.rerun()
-            else:
-                st.warning("Please complete all fields before continuing.")
     else:
         st.markdown(f"- **Name:** {user_profile['name']}")
         st.markdown(f"- **Age:** {user_profile['age']}")
@@ -74,10 +77,11 @@ with st.sidebar:
         st.markdown(f"- **Location:** {context_info['location'] or 'Unknown'}")
         st.markdown(f"- **Time:** {context_info['time'] or 'Unavailable'}")
 
-# Main Interface
+# Main App Title
 st.title("Empathetic Medical Assistant")
 st.markdown("*This assistant is powered by AI and is not a substitute for professional medical advice.*")
 
+# Start interaction
 if st.session_state.get("started", False):
     if len(st.session_state.chat_history) == 0:
         st.markdown(f"👋 Welcome, **{user_profile['name']}**! Type how you're feeling to begin the conversation.")
@@ -89,9 +93,6 @@ if st.session_state.get("started", False):
     user_input = st.chat_input("Type your message:")
 
     if user_input:
-        with st.chat_message("user"):
-            st.markdown(user_input)
-
         emotion = get_emotion(user_input)
         context_info["emotion"] = emotion
 
@@ -103,16 +104,20 @@ if st.session_state.get("started", False):
             else chat_agent()
         )
 
-        chat_context = "\n".join([
-            f"{'User' if role == 'user' else 'Assistant'}: {msg}"
-            for role, msg in st.session_state.chat_history[-10:]
-        ]) + f"\nUser: {user_input}"
+        with st.chat_message("user"):
+            st.markdown(user_input)
+
+        chat_context = ""
+        for role, msg in st.session_state.chat_history[-10:]:
+            chat_context += f"{'User' if role == 'user' else 'Assistant'}: {msg}\n"
+        chat_context += f"User: {user_input}"
 
         try:
             reply = asyncio.run(run_agent(agent, chat_context))
-        except Exception:
-            fallback = asyncio.run(run_agent(threat_agent("moderation fallback"), chat_context))
-            reply = fallback
+        except Exception as e:
+            print("Agent Error:", e)
+            fallback_agent = threat_agent("moderation trigger")
+            reply = asyncio.run(run_agent(fallback_agent, chat_context))
 
         with st.chat_message("bot"):
             st.markdown(f"<div style='font-size: 15px; max-width: 100%;'>{reply}</div>", unsafe_allow_html=True)
@@ -120,13 +125,15 @@ if st.session_state.get("started", False):
         st.session_state.chat_history.append(("user", user_input))
         st.session_state.chat_history.append(("bot", reply))
 
+    # Get Support / End Chat Controls
     col1, col2 = st.columns(2)
     with col1:
         if st.button("📞 Get Support"):
-            support_reply = asyncio.run(run_agent(appointment_agent(), ""))
             with st.chat_message("bot"):
+                st.write("Let me help you with that.")
+                support_reply = asyncio.run(run_agent(appointment_agent(), ""))
                 st.markdown(f"<div style='font-size: 15px'>{support_reply}</div>", unsafe_allow_html=True)
-            st.session_state.chat_history.append(("bot", support_reply))
+                st.session_state.chat_history.append(("bot", support_reply))
 
     with col2:
         if st.button("🛑 End Chat"):
