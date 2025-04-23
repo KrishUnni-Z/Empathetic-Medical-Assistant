@@ -8,23 +8,19 @@ emotion_classifier = pipeline("text-classification", model="bhadresh-savani/bert
 profile_path = "user_profile.txt"
 emotion_log_path = "emotion_log.txt"
 
-user_profile = {"name": "", "age": "", "gender": "", "location": ""}
+user_profile = {"name": "", "age": "", "gender": ""}
 context_info = {"time": "", "location": "", "emotion": ""}
 
 def load_profile():
     if os.path.exists(profile_path):
         with open(profile_path, "r") as f:
             lines = f.read().splitlines()
-            user_profile.update({
-                "name": lines[0] if len(lines) > 0 else "",
-                "age": lines[1] if len(lines) > 1 else "",
-                "gender": lines[2] if len(lines) > 2 else "",
-                "location": lines[3] if len(lines) > 3 else ""
-            })
+            if len(lines) >= 3:
+                user_profile["name"], user_profile["age"], user_profile["gender"] = lines[:3]
 
 def save_profile():
     with open(profile_path, "w") as f:
-        f.write(f"{user_profile['name']}\n{user_profile['age']}\n{user_profile['gender']}\n{user_profile['location']}")
+        f.write(f"{user_profile['name']}\n{user_profile['age']}\n{user_profile['gender']}")
 
 def get_time():
     return datetime.now().strftime("%A, %I:%M %p")
@@ -32,11 +28,9 @@ def get_time():
 def get_location():
     try:
         res = requests.get("https://ipinfo.io/json").json()
-        city = res.get("city", "")
-        region = res.get("region", "")
-        return f"{city}, {region}" if city else "Unknown"
+        return res.get("city", "") + ", " + res.get("region", "")
     except:
-        return "Unknown"
+        return "Unknown location"
 
 def get_emotion(text):
     try:
@@ -44,7 +38,9 @@ def get_emotion(text):
         label = results[0]["label"]
         score = results[0]["score"]
         log_emotion(label, score)
-        return label if score > 0.7 else "neutral"
+        if label in ["despair", "suicidal", "fear", "anger", "sadness"] and score > 0.7:
+            return label
+        return label
     except:
         return "neutral"
 
