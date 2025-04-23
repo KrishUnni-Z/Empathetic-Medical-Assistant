@@ -13,25 +13,14 @@ from chat_agents import (
 st.set_page_config(page_title="Empathetic Medical Assistant", layout="wide")
 load_profile()
 
-st.markdown("""
-    <style>
-    .main .block-container {
-        max-width: 100%;
-        padding-left: 3rem;
-        padding-right: 3rem;
-    }
-    .stChatInputContainer textarea {
-        min-height: 70px !important;
-        font-size: 16px !important;
-        padding: 0.75rem !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "started" not in st.session_state:
     st.session_state.started = False
+
+# Detect location/time even before form submit
+detected_location = get_location()
+detected_time = get_time()
 
 # Sidebar: Profile & Controls
 with st.sidebar:
@@ -53,19 +42,19 @@ with st.sidebar:
         with st.form("profile_form"):
             name = st.text_input("Your Name", value=user_profile["name"])
             age = st.text_input("Your Age", value=user_profile["age"])
-            gender = st.selectbox(
-                "Gender", ["Male", "Female", "Other"],
-                index=["Male", "Female", "Other"].index(user_profile["gender"]) if user_profile["gender"] else 0
-            )
+            gender_options = ["Select", "Male", "Female", "Other"]
+            gender = st.selectbox("Gender", gender_options, index=gender_options.index(user_profile["gender"]) if user_profile["gender"] in gender_options else 0)
+            manual_location = st.text_input("Your Location (e.g. Sydney, NSW)", value=detected_location)
+            manual_time = st.text_input("Current Time (e.g. Monday, 10:30 AM)", value=detected_time)
             submitted = st.form_submit_button("Start")
 
         if submitted:
-            if not name or not age or not gender:
-                st.warning("Please complete all profile fields to proceed.")
+            if not name or not age or gender == "Select":
+                st.warning("Please complete all profile fields.")
             else:
                 user_profile.update({"name": name, "age": age, "gender": gender})
-                context_info["location"] = get_location()
-                context_info["time"] = get_time()
+                context_info["location"] = manual_location
+                context_info["time"] = manual_time
                 save_profile()
                 st.session_state.started = True
                 st.session_state.chat_history = []
@@ -77,18 +66,17 @@ with st.sidebar:
         st.markdown(f"- **Location:** {context_info['location'] or 'Unknown'}")
         st.markdown(f"- **Time:** {context_info['time'] or 'Unavailable'}")
 
-# Main App Title
+# Main Title
 st.title("Empathetic Medical Assistant")
-st.markdown("*This assistant is powered by AI and is not a substitute for professional medical advice.*")
+st.markdown("*AI-powered assistant. Not a substitute for medical advice.*")
 
-# Start interaction
 if st.session_state.get("started", False):
     if len(st.session_state.chat_history) == 0:
-        st.markdown(f"👋 Welcome, **{user_profile['name']}**! Type how you're feeling to begin the conversation.")
+        st.markdown(f"👋 Welcome, **{user_profile['name']}**! Tell me how you're feeling to begin.")
 
     for role, message in st.session_state.chat_history:
         with st.chat_message(role):
-            st.markdown(f"<div style='font-size: 15px; max-width: 100%;'>{message}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-size: 15px'>{message}</div>", unsafe_allow_html=True)
 
     user_input = st.chat_input("Type your message:")
 
@@ -107,38 +95,34 @@ if st.session_state.get("started", False):
         with st.chat_message("user"):
             st.markdown(user_input)
 
-        chat_context = ""
-        for role, msg in st.session_state.chat_history[-10:]:
-            chat_context += f"{'User' if role == 'user' else 'Assistant'}: {msg}\n"
-        chat_context += f"User: {user_input}"
+        chat_context = "\n".join(
+            f"{'User' if role == 'user' else 'Assistant'}: {msg}"
+            for role, msg in st.session_state.chat_history[-10:]
+        ) + f"\nUser: {user_input}"
 
         try:
             reply = asyncio.run(run_agent(agent, chat_context))
         except Exception as e:
-            print("Agent Error:", e)
-            fallback_agent = threat_agent("moderation trigger")
-            reply = asyncio.run(run_agent(fallback_agent, chat_context))
+            reason = str(e)
+            fallback = threat_agent(f"moderation trigger: {reason}")
+            reply = asyncio.run(run_agent(fallback, chat_context))
 
         with st.chat_message("bot"):
-            st.markdown(f"<div style='font-size: 15px; max-width: 100%;'>{reply}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-size: 15px'>{reply}</div>", unsafe_allow_html=True)
 
         st.session_state.chat_history.append(("user", user_input))
         st.session_state.chat_history.append(("bot", reply))
 
-    # Get Support / End Chat Controls
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📞 Get Support"):
-            with st.chat_message("bot"):
-                st.write("Let me help you with that.")
-                support_reply = asyncio.run(run_agent(appointment_agent(), ""))
-                st.markdown(f"<div style='font-size: 15px'>{support_reply}</div>", unsafe_allow_html=True)
-                st.session_state.chat_history.append(("bot", support_reply))
+    # Support & End Chat Buttons (Below chat, not in columns)
+    if st.button("📞 Get Support"):
+        support_reply = asyncio.run(run_agent(appointment_agent(), ""))
+        with st.chat_message("bot"):
+            st.markdown(f"<div style='font-size: 15px'>{support_reply}</div>", unsafe_allow_html=True)
+        st.session_state.chat_history.append(("bot", support_reply))
 
-    with col2:
-        if st.button("🛑 End Chat"):
-            final_reply = asyncio.run(run_agent(conclusion_agent(), ""))
-            with st.chat_message("bot"):
-                st.markdown(f"<div style='font-size: 15px'>{final_reply}</div>", unsafe_allow_html=True)
-            st.session_state.chat_history.append(("bot", final_reply))
-            st.session_state.started = False
+    if st.button("🛑 End Chat"):
+        final_reply = asyncio.run(run_agent(conclusion_agent(), ""))
+        with st.chat_message("bot"):
+            st.markdown(f"<div style='font-size: 15px'>{final_reply}</div>", unsafe_allow_html=True)
+        st.session_state.chat_history.append(("bot", final_reply))
+        st.session_state.started = False
