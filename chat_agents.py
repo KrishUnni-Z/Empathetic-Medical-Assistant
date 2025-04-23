@@ -3,45 +3,45 @@ from config import MODEL_PROVIDER, model
 from core import context_info, user_profile, get_emotion
 
 def welcome_agent():
-    return Agent(
-        name="WelcomeAgent",
-        instructions=f"""
-        You are a supportive assistant welcoming {user_profile['name']}, aged {user_profile['age']}, identifying as {user_profile['gender']}.
-        The user is currently in {context_info['location']} at {context_info['time']}.
-        Use this context gently to offer comfort. End with a suggestion to continue the conversation.
-        """
-    )
+    instructions = f"""
+    You are a warm and supportive assistant.
+    Greet {user_profile['name']}, a {user_profile['age']} year old {user_profile['gender']}, in a gentle and calming tone.
+    The user is currently located in {context_info['location']} and it is {context_info['time']}.
+    Suggest simple wellness or lifestyle practices if helpful.
+    Make sure to mention that you're not a doctor and that any serious symptoms should be looked at by a professional.
+    """
+    return Agent(name="WelcomeAgent", instructions=instructions)
 
-def threat_agent(user_input):
-    emotion = get_emotion(user_input)
-    context_info["emotion"] = emotion
-    return Agent(
-        name="ThreatAgent",
-        instructions=f"""
-        The user expressed signs of distress (emotion: {emotion}).
-        Offer validation and calm reassurance. Encourage reaching out to trusted support.
-        Avoid diagnosis or solutions. Emphasize emotional safety and gentle care.
-        """
-    )
+def threat_agent(user_input=""):
+    emotion = context_info.get("emotion", "fear")
+    instructions = f"""
+    The user has expressed signs of emotional distress or danger. You are a safety-first support agent.
+    Your role is to stay calm, kind, and non-judgmental.
+    Do not give medical advice or try to solve the problem.
+    Instead, validate the user's feelings and urge them to talk to someone they trust or call local emergency services.
+    Use phrases like: "You are not alone", "It's okay to feel this way", "Please reach out for help".
+    Emotion detected: {emotion}
+    Time: {context_info['time']}, Location: {context_info['location']}
+    """
+    return Agent(name="ThreatAgent", instructions=instructions)
 
 def chat_agent():
-    return Agent(
-        name="ChatAgent",
-        instructions=f"""
-        You are chatting with {user_profile['name']}, aged {user_profile['age']}, from {context_info['location']} at {context_info['time']}.
-        Continue the conversation empathetically. Avoid repeating past suggestions.
-        Provide relevant comfort actions such as rest, hydration, or calm breathing.
-        """
-    )
+    instructions = f"""
+    Continue a kind and helpful conversation with {user_profile['name']}, a {user_profile['age']} year old {user_profile['gender']}.
+    Do not greet again. Stay empathetic and informative.
+    Use context like location ({context_info['location']}) and time ({context_info['time']}) to tailor suggestions.
+    Include light wellness prompts, hydration tips, or sleep reminders.
+    Never make a diagnosis.
+    """
+    return Agent(name="ChatAgent", instructions=instructions)
 
 def appointment_agent():
-    return Agent(
-        name="AppointmentAgent",
-        instructions="""
-        Help the user find a nearby healthcare provider or counselor.
-        Gently suggest online directories, clinics, or help lines. Avoid pressure.
-        """
-    )
+    instructions = """
+    Help the user find a doctor or counselor.
+    Provide suggestions like visiting a local clinic, calling a helpline, or searching for mental health support nearby.
+    Do not pressure or push; be gentle and respectful.
+    """
+    return Agent(name="AppointmentAgent", instructions=instructions)
 
 fallback_quotes = {
     "sadness": "This too shall pass. - Unknown",
@@ -55,25 +55,13 @@ fallback_quotes = {
 
 def conclusion_agent():
     emotion = context_info.get("emotion", "neutral")
-    quote = fallback_quotes.get(emotion, fallback_quotes["neutral"])
-    return Agent(
-        name="ConclusionAgent",
-        instructions=f'''
-        Thank the user for sharing. Offer an uplifting and safe farewell.
-        Include this quote: "{quote}"
-        Encourage them to return any time for more support.
-        '''
-    )
-
-def moderation_fallback_agent(reason="moderation"):
-    return Agent(
-        name="FallbackSafetyAgent",
-        instructions=f"""
-        The user's message could not be processed due to {reason}-related filtering.
-        Respond with a calm and caring tone. Emphasize that the assistant is here to listen and offer comfort.
-        Avoid triggering content or deep analysis. Let them know support is always available.
-        """
-    )
+    fallback_quote = fallback_quotes.get(emotion, fallback_quotes["neutral"])
+    instructions = f'''
+    Wrap up the session gently.
+    Thank the user for chatting and validate their effort in opening up.
+    End with a motivational quote suited for the detected emotion: "{fallback_quote}".
+    '''
+    return Agent(name="ConclusionAgent", instructions=instructions)
 
 async def run_agent(agent, full_chat_context):
     try:
@@ -84,16 +72,11 @@ async def run_agent(agent, full_chat_context):
         )
         return result.final_output
     except Exception as e:
-        error_str = str(e).lower()
-        # Check moderation tags
-        flagged_tags = ["self_harm", "violence", "sexual", "hate", "moderation"]
-        reason = next((tag for tag in flagged_tags if tag in error_str), "moderation")
-
-        # Use fallback safety agent
-        fallback = moderation_fallback_agent(reason)
-        fallback_result = await Runner.run(
-            fallback,
-            "The original message was filtered. Offer supportive fallback.",
-            run_config=RunConfig(model_provider=MODEL_PROVIDER, model=model)
-        )
-        return fallback_result.final_output
+        if "self_harm" in str(e).lower() or "moderation" in str(e).lower():
+            fallback = await Runner.run(
+                threat_agent(),  # Fall back to threat agent
+                full_chat_context,
+                run_config=RunConfig(model_provider=MODEL_PROVIDER, model=model)
+            )
+            return fallback.final_output
+        return "Sorry, I'm having trouble responding right now. Please try again in a moment."
