@@ -10,9 +10,11 @@ from chat_agents import (
     appointment_agent, conclusion_agent, run_agent
 )
 
+# --- Setup ---
 st.set_page_config(page_title="Empathetic Medical Assistant", layout="wide")
 load_profile()
 
+# --- UI Styling ---
 st.markdown("""
     <style>
     .main .block-container {
@@ -28,19 +30,20 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# --- Session State ---
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "started" not in st.session_state:
     st.session_state.started = False
 
-# Sidebar
+# --- Sidebar ---
 with st.sidebar:
     st.markdown("### Profile")
 
     if st.button("Reset Profile"):
         if os.path.exists("user_profile.txt"):
             os.remove("user_profile.txt")
-        user_profile.update({"name": "", "age": "", "gender": "", "location": ""})
+        user_profile.update({"name": "", "age": "", "gender": ""})
         st.session_state.started = False
         st.session_state.chat_history = []
         st.rerun()
@@ -61,11 +64,10 @@ with st.sidebar:
             user_profile.update({
                 "name": name,
                 "age": str(age),
-                "gender": gender,
-                "location": get_location()
+                "gender": gender
             })
+            context_info["location"] = get_location()
             context_info["time"] = get_time()
-            context_info["location"] = user_profile["location"]
             save_profile()
             st.session_state.started = True
             st.session_state.chat_history = []
@@ -74,15 +76,16 @@ with st.sidebar:
         st.markdown(f"- **Name:** {user_profile['name']}")
         st.markdown(f"- **Age:** {user_profile['age']}")
         st.markdown(f"- **Gender:** {user_profile['gender']}")
-        if user_profile["location"]:
-            st.markdown(f"- **Location:** {user_profile['location']}")
+        st.markdown(f"- **Location:** {context_info['location']}")
         st.markdown(f"- **Time:** {context_info['time']}")
+        if "oregon" in context_info["location"].lower():
+            st.warning("If your location is incorrect, please re-enter it for a better experience.")
 
-# Main Interface
+# --- Main Chat Interface ---
 st.title("Empathetic Medical Assistant")
 st.markdown("*This assistant is powered by AI and is not a substitute for professional medical advice.*")
 
-if st.session_state.started:
+if st.session_state.get("started", False):
     if len(st.session_state.chat_history) == 0:
         st.markdown(f"👋 Welcome, **{user_profile['name']}**! Type how you're feeling to begin the conversation.")
 
@@ -96,26 +99,21 @@ if st.session_state.started:
         emotion = get_emotion(user_input)
         context_info["emotion"] = emotion
 
-        if any(phrase in user_input.lower() for phrase in ["thanks", "thank you", "bye", "take care", "goodbye"]):
-            agent = conclusion_agent()
-        else:
-            agent = (
-                threat_agent(user_input)
-                if len(st.session_state.chat_history) == 0 and emotion in ["despair", "suicidal", "fear", "anger", "sadness"]
-                else welcome_agent()
-                if len(st.session_state.chat_history) == 0
-                else chat_agent()
-            )
+        agent = (
+            threat_agent(user_input)
+            if len(st.session_state.chat_history) == 0 and emotion in ["despair", "suicidal", "fear", "anger", "sadness"]
+            else welcome_agent()
+            if len(st.session_state.chat_history) == 0
+            else chat_agent()
+        )
 
         with st.chat_message("user"):
             st.markdown(user_input)
 
         chat_context = f"User: {user_input}"
 
-        try:
-            reply = asyncio.run(run_agent(agent, chat_context))
-        except Exception:
-            reply = "I'm sorry, the assistant is currently busy or rate-limited. Please try again shortly."
+        # Fallback handled internally in run_agent()
+        reply = asyncio.run(run_agent(agent, chat_context))
 
         with st.chat_message("bot"):
             st.markdown(f"<div style='font-size: 15px; max-width: 100%;'>{reply}</div>", unsafe_allow_html=True)
@@ -123,10 +121,17 @@ if st.session_state.started:
         st.session_state.chat_history.append(("user", user_input))
         st.session_state.chat_history.append(("bot", reply))
 
-    # Persistent end button below chat
-    if st.button("🛑 End Chat"):
-        final_reply = asyncio.run(run_agent(conclusion_agent(), ""))
+    # --- Get Support ---
+    if st.button("Get Support"):
         with st.chat_message("bot"):
+            support_reply = asyncio.run(run_agent(appointment_agent(), ""))
+            st.markdown(f"<div style='font-size: 15px'>{support_reply}</div>", unsafe_allow_html=True)
+            st.session_state.chat_history.append(("bot", support_reply))
+
+    # --- End Chat ---
+    if st.button("End Chat"):
+        with st.chat_message("bot"):
+            final_reply = asyncio.run(run_agent(conclusion_agent(), ""))
             st.markdown(f"<div style='font-size: 15px'>{final_reply}</div>", unsafe_allow_html=True)
         st.session_state.chat_history.append(("bot", final_reply))
         st.session_state.started = False
