@@ -130,7 +130,7 @@ if st.session_state.get("started", False):
             chl=2
 
 
-    if(chk==1||chk==2):
+    if(chk==1 or chk==2):
         if chk==1:
             with st.chat_message("bot"):
                     st.write("Let me help you with that.")
