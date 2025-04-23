@@ -7,14 +7,12 @@ from core import (
 )
 from chat_agents import (
     welcome_agent, threat_agent, chat_agent,
-    appointment_agent, conclusion_agent, run_agent
+    appointment_agent, conclusion_agent, fallback_agent, run_agent
 )
 
-# --- Setup ---
 st.set_page_config(page_title="Empathetic Medical Assistant", layout="wide")
 load_profile()
 
-# --- UI Styling ---
 st.markdown("""
     <style>
     .main .block-container {
@@ -30,20 +28,20 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- Session State ---
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "started" not in st.session_state:
     st.session_state.started = False
 
-# --- Sidebar ---
+# Sidebar: Profile Form
 with st.sidebar:
     st.markdown("### Profile")
 
     if st.button("Reset Profile"):
         if os.path.exists("user_profile.txt"):
             os.remove("user_profile.txt")
-        user_profile.update({"name": "", "age": "", "gender": ""})
+        for key in user_profile:
+            user_profile[key] = ""
         st.session_state.started = False
         st.session_state.chat_history = []
         st.rerun()
@@ -57,37 +55,35 @@ with st.sidebar:
             name = st.text_input("Your Name", value=user_profile["name"])
             age = st.number_input("Your Age", min_value=1, max_value=120, step=1)
             gender = st.selectbox("Gender", ["Male", "Female", "Other"],
-                index=["Male", "Female", "Other"].index(user_profile["gender"]) if user_profile["gender"] else 0)
+                                  index=["Male", "Female", "Other"].index(user_profile["gender"]) if user_profile["gender"] else 0)
+            location = st.text_input("Your City (for time zone)", value=user_profile["location"] or get_location())
             submitted = st.form_submit_button("Start")
 
         if submitted:
-            user_profile.update({
-                "name": name,
-                "age": str(age),
-                "gender": gender
-            })
-            context_info["location"] = get_location()
-            context_info["time"] = get_time()
+            user_profile["name"] = name
+            user_profile["age"] = str(age)
+            user_profile["gender"] = gender
+            user_profile["location"] = location
+            context_info["location"] = location
+            context_info["time"] = get_time(location)
             save_profile()
             st.session_state.started = True
             st.session_state.chat_history = []
             st.rerun()
+
     else:
         st.markdown(f"- **Name:** {user_profile['name']}")
         st.markdown(f"- **Age:** {user_profile['age']}")
         st.markdown(f"- **Gender:** {user_profile['gender']}")
-        st.markdown(f"- **Location:** {context_info['location']}")
+        st.markdown(f"- **Location:** {user_profile['location']}")
         st.markdown(f"- **Time:** {context_info['time']}")
-        if "oregon" in context_info["location"].lower():
-            st.warning("If your location is incorrect, please re-enter it for a better experience.")
 
-# --- Main Chat Interface ---
 st.title("Empathetic Medical Assistant")
 st.markdown("*This assistant is powered by AI and is not a substitute for professional medical advice.*")
 
-if st.session_state.get("started", False):
+if st.session_state.started:
     if len(st.session_state.chat_history) == 0:
-        st.markdown(f"👋 Welcome, **{user_profile['name']}**! Type how you're feeling to begin the conversation.")
+        st.markdown(f"👋 Welcome, **{user_profile['name']}**! Type how you're feeling to begin.")
 
     for role, message in st.session_state.chat_history:
         with st.chat_message(role):
@@ -112,8 +108,10 @@ if st.session_state.get("started", False):
 
         chat_context = f"User: {user_input}"
 
-        # Fallback handled internally in run_agent()
-        reply = asyncio.run(run_agent(agent, chat_context))
+        try:
+            reply = asyncio.run(run_agent(agent, chat_context))
+        except Exception as e:
+            reply = asyncio.run(run_agent(fallback_agent(reason="moderation triggered or system busy"), chat_context))
 
         with st.chat_message("bot"):
             st.markdown(f"<div style='font-size: 15px; max-width: 100%;'>{reply}</div>", unsafe_allow_html=True)
@@ -121,17 +119,20 @@ if st.session_state.get("started", False):
         st.session_state.chat_history.append(("user", user_input))
         st.session_state.chat_history.append(("bot", reply))
 
-    # --- Get Support ---
-    if st.button("Get Support"):
-        with st.chat_message("bot"):
-            support_reply = asyncio.run(run_agent(appointment_agent(), ""))
-            st.markdown(f"<div style='font-size: 15px'>{support_reply}</div>", unsafe_allow_html=True)
-            st.session_state.chat_history.append(("bot", support_reply))
-
-    # --- End Chat ---
-    if st.button("End Chat"):
-        with st.chat_message("bot"):
-            final_reply = asyncio.run(run_agent(conclusion_agent(), ""))
-            st.markdown(f"<div style='font-size: 15px'>{final_reply}</div>", unsafe_allow_html=True)
-        st.session_state.chat_history.append(("bot", final_reply))
-        st.session_state.started = False
+    # Buttons
+    st.markdown("### Actions:")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Get Support"):
+            with st.chat_message("bot"):
+                st.write("Let me help you with that.")
+                support_reply = asyncio.run(run_agent(appointment_agent(), ""))
+                st.markdown(f"<div style='font-size: 15px'>{support_reply}</div>", unsafe_allow_html=True)
+                st.session_state.chat_history.append(("bot", support_reply))
+    with col2:
+        if st.button("End Chat"):
+            with st.chat_message("bot"):
+                final_reply = asyncio.run(run_agent(conclusion_agent(), ""))
+                st.markdown(f"<div style='font-size: 15px'>{final_reply}</div>", unsafe_allow_html=True)
+            st.session_state.chat_history.append(("bot", final_reply))
+            st.session_state.started = False
