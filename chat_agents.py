@@ -61,11 +61,6 @@ def conclusion_agent():
     )
 
 async def run_agent(agent, context):
-    try:
-        response = await Runner.run(agent, context, run_config=RunConfig(model_provider=MODEL_PROVIDER, model=model))
-        return response.final_output
-    except Exception as e:
-        if "content_filter" in str(e).lower() or "self_harm" in str(e).lower():
-            fallback = await Runner.run(threat_agent("moderation fallback"), context, run_config=RunConfig(model_provider=MODEL_PROVIDER, model=model))
-            return fallback.final_output
-        return "Sorry, I'm unable to respond at the moment. Please try again soon."
+   response = await Runner.run(agent, context, run_config=RunConfig(model_provider=MODEL_PROVIDER, model=model))
+   return response.final_output
+    
