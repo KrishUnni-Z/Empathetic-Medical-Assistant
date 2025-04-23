@@ -1,3 +1,4 @@
+# app.py
 import streamlit as st
 import asyncio
 import os
@@ -7,7 +8,7 @@ from core import (
 )
 from chat_agents import (
     welcome_agent, threat_agent, chat_agent,
-    appointment_agent, conclusion_agent, fallback_agent, run_agent
+    appointment_agent, conclusion_agent, run_agent
 )
 
 st.set_page_config(page_title="Empathetic Medical Assistant", layout="wide")
@@ -15,11 +16,7 @@ load_profile()
 
 st.markdown("""
     <style>
-    .main .block-container {
-        max-width: 100%;
-        padding-left: 3rem;
-        padding-right: 3rem;
-    }
+    .main .block-container { max-width: 100%; padding-left: 3rem; padding-right: 3rem; }
     .stChatInputContainer textarea {
         min-height: 70px !important;
         font-size: 16px !important;
@@ -33,15 +30,14 @@ if "chat_history" not in st.session_state:
 if "started" not in st.session_state:
     st.session_state.started = False
 
-# Sidebar: Profile Form
+# Sidebar
 with st.sidebar:
     st.markdown("### Profile")
 
     if st.button("Reset Profile"):
         if os.path.exists("user_profile.txt"):
             os.remove("user_profile.txt")
-        for key in user_profile:
-            user_profile[key] = ""
+        user_profile.update({"name": "", "age": "", "gender": ""})
         st.session_state.started = False
         st.session_state.chat_history = []
         st.rerun()
@@ -53,19 +49,17 @@ with st.sidebar:
     if not st.session_state.started:
         with st.form("profile_form"):
             name = st.text_input("Your Name", value=user_profile["name"])
-            age = st.number_input("Your Age", min_value=1, max_value=120, step=1)
+            age = st.text_input("Your Age", value=user_profile["age"])
             gender = st.selectbox("Gender", ["Male", "Female", "Other"],
-                                  index=["Male", "Female", "Other"].index(user_profile["gender"]) if user_profile["gender"] else 0)
-            location = st.text_input("Your City (for time zone)", value=user_profile["location"] or get_location())
+                index=["Male", "Female", "Other"].index(user_profile["gender"]) if user_profile["gender"] else 0)
             submitted = st.form_submit_button("Start")
 
         if submitted:
             user_profile["name"] = name
-            user_profile["age"] = str(age)
+            user_profile["age"] = age
             user_profile["gender"] = gender
-            user_profile["location"] = location
-            context_info["location"] = location
-            context_info["time"] = get_time(location)
+            context_info["location"] = get_location()
+            context_info["time"] = get_time()
             save_profile()
             st.session_state.started = True
             st.session_state.chat_history = []
@@ -75,15 +69,16 @@ with st.sidebar:
         st.markdown(f"- **Name:** {user_profile['name']}")
         st.markdown(f"- **Age:** {user_profile['age']}")
         st.markdown(f"- **Gender:** {user_profile['gender']}")
-        st.markdown(f"- **Location:** {user_profile['location']}")
-        st.markdown(f"- **Time:** {context_info['time']}")
+        st.markdown(f"- **Location:** {context_info['location'] or 'Unknown'}")
+        st.markdown(f"- **Time:** {context_info['time'] or 'Unavailable'}")
 
+# Main Interface
 st.title("Empathetic Medical Assistant")
 st.markdown("*This assistant is powered by AI and is not a substitute for professional medical advice.*")
 
-if st.session_state.started:
+if st.session_state.get("started", False):
     if len(st.session_state.chat_history) == 0:
-        st.markdown(f"👋 Welcome, **{user_profile['name']}**! Type how you're feeling to begin.")
+        st.markdown(f"👋 Welcome, **{user_profile['name']}**! Type how you're feeling to begin the conversation.")
 
     for role, message in st.session_state.chat_history:
         with st.chat_message(role):
@@ -106,12 +101,16 @@ if st.session_state.started:
         with st.chat_message("user"):
             st.markdown(user_input)
 
-        chat_context = f"User: {user_input}"
+        chat_context = ""
+        for role, msg in st.session_state.chat_history[-10:]:
+            chat_context += f"{'User' if role == 'user' else 'Assistant'}: {msg}\n"
+        chat_context += f"User: {user_input}"
 
         try:
             reply = asyncio.run(run_agent(agent, chat_context))
-        except Exception as e:
-            reply = asyncio.run(run_agent(fallback_agent(reason="moderation triggered or system busy"), chat_context))
+        except Exception:
+            fallback_agent = threat_agent("moderation trigger")
+            reply = asyncio.run(run_agent(fallback_agent, chat_context))
 
         with st.chat_message("bot"):
             st.markdown(f"<div style='font-size: 15px; max-width: 100%;'>{reply}</div>", unsafe_allow_html=True)
@@ -119,20 +118,19 @@ if st.session_state.started:
         st.session_state.chat_history.append(("user", user_input))
         st.session_state.chat_history.append(("bot", reply))
 
-    # Buttons
-    st.markdown("### Actions:")
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("Get Support"):
+        if st.button("📞 Get Support"):
             with st.chat_message("bot"):
                 st.write("Let me help you with that.")
                 support_reply = asyncio.run(run_agent(appointment_agent(), ""))
                 st.markdown(f"<div style='font-size: 15px'>{support_reply}</div>", unsafe_allow_html=True)
                 st.session_state.chat_history.append(("bot", support_reply))
+
     with col2:
-        if st.button("End Chat"):
+        if st.button("🛑 End Chat"):
+            final_reply = asyncio.run(run_agent(conclusion_agent(), ""))
             with st.chat_message("bot"):
-                final_reply = asyncio.run(run_agent(conclusion_agent(), ""))
                 st.markdown(f"<div style='font-size: 15px'>{final_reply}</div>", unsafe_allow_html=True)
             st.session_state.chat_history.append(("bot", final_reply))
             st.session_state.started = False
