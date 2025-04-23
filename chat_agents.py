@@ -16,10 +16,10 @@ def threat_agent(reason=""):
     return Agent(
         name="ThreatAgent",
         instructions=f"""
-        The user may be experiencing distress. Context: {reason}
-        Location: {context_info['location']}, Time: {context_info['time']}
-        You are a calm, supportive assistant. Recommend talking to family, friends, or support services.
-        Never give diagnoses. Do not panic the user.
+        The user is experiencing distress related to: {reason}.
+        You are a calm, supportive assistant. Do not give diagnoses.
+        Urge the user to contact trusted people, or call support lines.
+        Time: {context_info['time']}, Location: {context_info['location']}
         """
     )
 
@@ -33,12 +33,24 @@ def chat_agent():
         """
     )
 
-def appointment_agent():
+def appointment_agent(emotion="neutral"):
+    tips = {
+        "despair": "You can call Lifeline Australia at 13 11 14 or visit beyondblue.org.au.",
+        "anxious": "You might find MindSpot or Head to Health useful for anxiety.",
+        "sadness": "You are not alone. Consider talking to a friend or calling Lifeline (13 11 14).",
+        "fear": "You're safe. If this fear persists, you can seek calm guidance through a GP.",
+        "anger": "Try to breathe deeply. Anger support groups or a psychologist might help.",
+        "suicidal": "Please call 000 or Lifeline (13 11 14) immediately. You matter.",
+        "neutral": "If you're unsure, you can always start with a free support line like Lifeline or Beyond Blue.",
+        "joy": "Wonderful to hear! Remember to check in with others who might need support too."
+    }
+    tip = tips.get(emotion, tips["neutral"])
     return Agent(
         name="AppointmentAgent",
-        instructions="""
-        Gently suggest the user consider talking to a doctor or helpline.
-        Recommend support options. Never pressure.
+        instructions=f"""
+        Offer mental health support guidance for someone feeling {emotion}.
+        Suggest Australian resources, hotlines, or websites.
+        Specific support: {tip}
         """
     )
 
