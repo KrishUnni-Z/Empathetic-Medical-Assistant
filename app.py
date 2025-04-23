@@ -19,11 +19,9 @@ if "chat_history" not in st.session_state:
 if "started" not in st.session_state:
     st.session_state.started = False
 
-# Detect location/time before profile form
 detected_location = get_location()
 detected_time = get_time()
 
-# Sidebar: Profile & Controls
 with st.sidebar:
     st.markdown("### Profile")
 
@@ -69,7 +67,6 @@ with st.sidebar:
         st.markdown(f"- **Location:** {context_info['location'] or 'Unknown'}")
         st.markdown(f"- **Time:** {context_info['time'] or 'Unavailable'}")
 
-# Title and disclaimer
 st.title("Empathetic Medical Assistant")
 st.markdown("*AI-powered assistant. Not a substitute for professional medical advice.*")
 
@@ -131,9 +128,7 @@ if st.session_state.get("started", False):
         st.session_state.chat_history.append(("bot", reply))
 
     if st.button("📞 Get Support"):
-        emotion = context_info.get("emotion", "neutral")
-        support_prompt = f"The user is feeling {emotion}. Provide a helpful list of mental health services or hotlines available in Australia."
-        support_reply = asyncio.run(run_agent(appointment_agent(emotion), support_prompt))
+        support_reply = asyncio.run(run_agent(appointment_agent(), ""))
         with st.chat_message("bot"):
             st.markdown(f"<div style='font-size: 15px'>{support_reply}</div>", unsafe_allow_html=True)
         st.session_state.chat_history.append(("bot", support_reply))
