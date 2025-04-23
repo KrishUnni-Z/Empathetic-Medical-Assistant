@@ -42,6 +42,18 @@ def get_emotion(text):
     except:
         return "neutral"
 
+# --- Crisis detection helper ---
+CRISIS_KEYWORDS = [
+    "kill myself", "end it", "i want to die", "suicide", "disappear",
+    "worthless", "hopeless", "i can't go on", "cut myself", "hurt myself"
+]
+
+def is_crisis_message(text, emotion):
+    lowered = text.lower()
+    keyword_flag = any(kw in lowered for kw in CRISIS_KEYWORDS)
+    emotion_flag = emotion in ["despair", "suicidal"]
+    return keyword_flag or emotion_flag
+
 def log_emotion(label, score):
     try:
         with open(emotion_log_path, "a") as f:
