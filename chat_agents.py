@@ -33,24 +33,17 @@ def chat_agent():
         """
     )
 
-def appointment_agent(emotion="neutral"):
-    tips = {
-        "despair": "You can call Lifeline Australia at 13 11 14 or visit beyondblue.org.au.",
-        "anxious": "You might find MindSpot or Head to Health useful for anxiety.",
-        "sadness": "You are not alone. Consider talking to a friend or calling Lifeline (13 11 14).",
-        "fear": "You're safe. If this fear persists, you can seek calm guidance through a GP.",
-        "anger": "Try to breathe deeply. Anger support groups or a psychologist might help.",
-        "suicidal": "Please call 000 or Lifeline (13 11 14) immediately. You matter.",
-        "neutral": "If you're unsure, you can always start with a free support line like Lifeline or Beyond Blue.",
-        "joy": "Wonderful to hear! Remember to check in with others who might need support too."
-    }
-    tip = tips.get(emotion, tips["neutral"])
+def appointment_agent():
     return Agent(
         name="AppointmentAgent",
         instructions=f"""
-        Offer mental health support guidance for someone feeling {emotion}.
-        Suggest Australian resources, hotlines, or websites.
-        Specific support: {tip}
+        The user may need mental health support.
+        Their location is: {context_info['location']}.
+        Provide region-specific or country-specific support services, such as:
+        - Mental health hotlines
+        - Local clinics
+        - Online therapy services
+        If the location is missing or unknown, recommend global services like WHO, Befrienders, or TalkLife.
         """
     )
 
